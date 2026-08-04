@@ -1,80 +1,67 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:archive/archive_io.dart';
-import 'package:hive/hive.dart';
+import 'package:archive/archive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-
 import '../models/mood_entry.dart';
-import '../models/general_entry.dart';
 
 class BackupService {
-  static Future<void> exportBackup() async {
-    final moodBox = Hive.box<MoodEntry>('mood_entries');
-    final generalBox = Hive.box<GeneralEntry>('general_entries');
+  static Future<File?> createZipBackup() async {
+    try {
+      final archive = Archive();
+      final moodBox = Hive.box<MoodEntry>('mood_entries');
+      final entries = moodBox.values.toList();
 
-    // 1. Serialize entries
-    final moodEntriesData = moodBox.values.map((e) => {
+      final List<Map<String, dynamic>> jsonEntries = entries.map((e) {
+        return {
           'id': e.id,
           'date': e.date.toIso8601String(),
+          'primaryColorValue': e.primaryColorValue,
           'colorValue': e.colorValue,
+          'moodPercentages': e.moodPercentages,
+          'stateTags': e.stateTags,
           'note': e.note,
-          'photoPath': e.photoPath,
-        }).toList();
+          'photoPaths': e.safePhotoPaths,
+        };
+      }).toList();
 
-    final generalEntriesData = generalBox.values.map((e) => {
-          'id': e.id,
-          'date': e.date.toIso8601String(),
-          'title': e.title,
-          'content': e.content,
-          'photoPath': e.photoPath,
-        }).toList();
+      final jsonString = jsonEncode(jsonEntries);
+      archive.addFile(ArchiveFile('entries.json', jsonString.length, utf8.encode(jsonString)));
 
-    final backupPayload = {
-      'exportedAt': DateTime.now().toIso8601String(),
-      'moodEntries': moodEntriesData,
-      'generalEntries': generalEntriesData,
-    };
-
-    final jsonString = const JsonEncoder.withIndent('  ').convert(backupPayload);
-
-    // 2. Prepare Zip Archive
-    final encoder = ZipFileEncoder();
-    final tempDir = await getTemporaryDirectory();
-    final zipPath = '${tempDir.path}/MoodSphere_Backup_${DateTime.now().millisecondsSinceEpoch}.zip';
-
-    encoder.create(zipPath);
-
-    // Add JSON payload
-    final jsonFile = File('${tempDir.path}/backup_data.json');
-    await jsonFile.writeAsString(jsonString);
-    encoder.addFile(jsonFile);
-
-    // Collect and add photos
-    final photoPaths = <String>{};
-    for (var e in moodBox.values) {
-      if (e.photoPath != null && File(e.photoPath!).existsSync()) {
-        photoPaths.add(e.photoPath!);
+      for (var e in entries) {
+        for (var path in e.safePhotoPaths) {
+          final file = File(path);
+          if (file.existsSync()) {
+            final bytes = await file.readAsBytes();
+            final fileName = path.split('/').last;
+            archive.addFile(ArchiveFile('photos/$fileName', bytes.length, bytes));
+          }
+        }
       }
-    }
-    for (var e in generalBox.values) {
-      if (e.photoPath != null && File(e.photoPath!).existsSync()) {
-        photoPaths.add(e.photoPath!);
-      }
-    }
 
-    for (var path in photoPaths) {
-      final photoFile = File(path);
-      encoder.addFile(photoFile);
+      final zipEncoder = ZipEncoder();
+      final encodedArchive = zipEncoder.encode(archive);
+      if (encodedArchive == null) return null;
+
+      final tempDir = await getTemporaryDirectory();
+      final zipFile = File('${tempDir.path}/MoodSphere_Backup_${DateTime.now().millisecondsSinceEpoch}.zip');
+      await zipFile.writeAsBytes(encodedArchive);
+
+      return zipFile;
+    } catch (e) {
+      return null;
     }
+  }
 
-    encoder.close();
-
-    // 3. Share via share_plus
-    await Share.shareXFiles(
-      [XFile(zipPath)],
-      text: 'MoodSphere Local Backup Archive',
-      subject: 'MoodSphere Data Backup',
-    );
+  static Future<void> exportBackup() async {
+    final file = await createZipBackup();
+    if (file != null && file.existsSync()) {
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: 'MoodSphere Local Backup',
+        text: 'Here is your local MoodSphere backup zip file.',
+      );
+    }
   }
 }
