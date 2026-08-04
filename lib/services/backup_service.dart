@@ -3,9 +3,11 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/mood_entry.dart';
 
 class BackupService {
+  /// Generates a local ZIP archive containing all Hive entries and photos.
   static Future<File?> createZipBackup() async {
     try {
       final archive = Archive();
@@ -17,11 +19,11 @@ class BackupService {
         return {
           'id': e.id,
           'date': e.date.toIso8601String(),
-          'colorValue': e.colorValue,
+          'primaryColorValue': e.primaryColorValue,
           'moodPercentages': e.moodPercentages,
           'stateTags': e.stateTags,
           'note': e.note,
-          'photoPaths': e.photoPaths ?? (e.photoPath != null ? [e.photoPath!] : []),
+          'photoPaths': e.safePhotoPaths,
         };
       }).toList();
 
@@ -30,8 +32,7 @@ class BackupService {
 
       // 2. Attach Photos to Zip
       for (var e in entries) {
-        final paths = e.photoPaths ?? (e.photoPath != null ? [e.photoPath!] : []);
-        for (var path in paths) {
+        for (var path in e.safePhotoPaths) {
           final file = File(path);
           if (file.existsSync()) {
             final bytes = await file.readAsBytes();
@@ -53,6 +54,18 @@ class BackupService {
       return zipFile;
     } catch (e) {
       return null;
+    }
+  }
+
+  /// Called by settings_screen.dart to trigger the system share sheet for export.
+  static Future<void> exportBackup() async {
+    final file = await createZipBackup();
+    if (file != null && file.existsSync()) {
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: 'MoodSphere Local Backup',
+        text: 'Here is your local MoodSphere backup zip file.',
+      );
     }
   }
 }
