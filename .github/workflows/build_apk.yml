@@ -27,6 +27,22 @@ jobs:
       - name: Generate Missing Android Folder
         run: flutter create . --platforms=android --org com.moodsphere
 
+      - name: Configure Repository Mirrors (Bypass 429 Rate Limits)
+        run: |
+          python3 -c "
+          import os
+
+          settings_kts = 'android/settings.gradle.kts'
+          if os.path.exists(settings_kts):
+              with open(settings_kts, 'r') as f:
+                  content = f.read()
+              if 'mavenCentral()' not in content:
+                  content = content.replace('pluginManagement {', 'pluginManagement {\n    repositories {\n        google()\n        mavenCentral()\n        gradlePluginPortal()\n    }')
+                  with open(settings_kts, 'w') as f:
+                      f.write(content)
+              print('Patched settings.gradle.kts with repo mirrors.')
+          "
+
       - name: Enable Java Desugaring for Notifications
         run: |
           python3 -c "
