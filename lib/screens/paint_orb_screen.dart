@@ -17,22 +17,49 @@ class PaintOrbScreen extends ConsumerStatefulWidget {
   ConsumerState<PaintOrbScreen> createState() => _PaintOrbScreenState();
 }
 
-class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen> {
+class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
+    with SingleTickerProviderStateMixin {
   late Color _selectedColor;
   final TextEditingController _noteController = TextEditingController();
   String? _selectedPhotoPath;
   final ImagePicker _picker = ImagePicker();
   bool _isSaving = false;
 
+  late AnimationController _flyAnimationController;
+  late Animation<double> _flyScaleAnimation;
+  late Animation<Offset> _flySlideAnimation;
+
   @override
   void initState() {
     super.initState();
-    // Default initial color: Radiant Gold
     _selectedColor = Color(MoodColorPreset.defaultPresets.first.colorValue);
+
+    _flyAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    );
+
+    _flyScaleAnimation = Tween<double>(begin: 1.0, end: 0.15).animate(
+      CurvedAnimation(
+        parent: _flyAnimationController,
+        curve: Curves.easeInBack,
+      ),
+    );
+
+    _flySlideAnimation = Tween<Offset>(
+      begin: Offset.zero,
+      end: const Offset(0, -0.6),
+    ).animate(
+      CurvedAnimation(
+        parent: _flyAnimationController,
+        curve: Curves.easeInOutCubic,
+      ),
+    );
   }
 
   @override
   void dispose() {
+    _flyAnimationController.dispose();
     _noteController.dispose();
     super.dispose();
   }
@@ -66,6 +93,10 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen> {
       _isSaving = true;
     });
 
+    // 1. Play Spring Save & Fly Animation
+    await _flyAnimationController.forward();
+
+    // 2. Write to Hive via Riverpod
     final newEntry = MoodEntry(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       date: DateTime.now(),
@@ -78,6 +109,7 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen> {
 
     await ref.read(moodNotifierProvider.notifier).addEntry(newEntry);
 
+    // 3. Navigate back to Home Galaxy Sphere
     if (mounted) {
       Navigator.of(context).pop();
     }
@@ -115,13 +147,19 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen> {
             children: [
               const SizedBox(height: 12),
 
-              // Interactive Canvas Orb
-              Center(
-                child: SizedBox(
-                  width: 240,
-                  height: 240,
-                  child: CustomPaint(
-                    painter: OrbPainter(baseColor: _selectedColor),
+              // Animated Interactive Canvas Orb (with Save & Fly transition)
+              SlideTransition(
+                position: _flySlideAnimation,
+                child: ScaleTransition(
+                  scale: _flyScaleAnimation,
+                  child: Center(
+                    child: SizedBox(
+                      width: 240,
+                      height: 240,
+                      child: CustomPaint(
+                        painter: OrbPainter(baseColor: _selectedColor),
+                      ),
+                    ),
                   ),
                 ),
               ).animate().scale(
@@ -336,7 +374,7 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen> {
 
               const SizedBox(height: 36),
 
-              // Save Button
+              // Save & Fly Button
               SizedBox(
                 width: double.infinity,
                 height: 54,
@@ -361,7 +399,7 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen> {
                           ),
                         )
                       : Text(
-                          'Save Mood Entry',
+                          'Save & Fly to Sphere',
                           style: GoogleFonts.inter(
                             color: Colors.black,
                             fontSize: 16,

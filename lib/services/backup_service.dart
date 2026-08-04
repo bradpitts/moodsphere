@@ -1,0 +1,80 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:archive/archive_io.dart';
+import 'package:hive/hive.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+
+import '../models/mood_entry.dart';
+import '../models/general_entry.dart';
+
+class BackupService {
+  static Future<void> exportBackup() async {
+    final moodBox = Hive.box<MoodEntry>('mood_entries');
+    final generalBox = Hive.box<GeneralEntry>('general_entries');
+
+    // 1. Serialize entries
+    final moodEntriesData = moodBox.values.map((e) => {
+          'id': e.id,
+          'date': e.date.toIso8601String(),
+          'colorValue': e.colorValue,
+          'note': e.note,
+          'photoPath': e.photoPath,
+        }).toList();
+
+    final generalEntriesData = generalBox.values.map((e) => {
+          'id': e.id,
+          'date': e.date.toIso8601String(),
+          'title': e.title,
+          'content': e.content,
+          'photoPath': e.photoPath,
+        }).toList();
+
+    final backupPayload = {
+      'exportedAt': DateTime.now().toIso8601String(),
+      'moodEntries': moodEntriesData,
+      'generalEntries': generalEntriesData,
+    };
+
+    final jsonString = const JsonEncoder.withIndent('  ').convert(backupPayload);
+
+    // 2. Prepare Zip Archive
+    final encoder = ZipFileEncoder();
+    final tempDir = await getTemporaryDirectory();
+    final zipPath = '${tempDir.path}/MoodSphere_Backup_${DateTime.now().millisecondsSinceEpoch}.zip';
+
+    encoder.create(zipPath);
+
+    // Add JSON payload
+    final jsonFile = File('${tempDir.path}/backup_data.json');
+    await jsonFile.writeAsString(jsonString);
+    encoder.addFile(jsonFile);
+
+    // Collect and add photos
+    final photoPaths = <String>{};
+    for (var e in moodBox.values) {
+      if (e.photoPath != null && File(e.photoPath!).existsSync()) {
+        photoPaths.add(e.photoPath!);
+      }
+    }
+    for (var e in generalBox.values) {
+      if (e.photoPath != null && File(e.photoPath!).existsSync()) {
+        photoPaths.add(e.photoPath!);
+      }
+    }
+
+    for (var path in photoPaths) {
+      final photoFile = File(path);
+      encoder.addFile(photoFile);
+    }
+
+    encoder.close();
+
+    // 3. Share via share_plus
+    await Share.shareXFiles(
+      [XFile(zipPath)],
+      text: 'MoodSphere Local Backup Archive',
+      subject: 'MoodSphere Data Backup',
+    );
+  }
+}

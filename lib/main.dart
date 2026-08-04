@@ -5,7 +5,10 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'models/mood_entry.dart';
 import 'models/mood_color_preset.dart';
+import 'models/general_entry.dart';
 import 'screens/home_screen.dart';
+import 'screens/app_lock_screen.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,27 +16,53 @@ void main() async {
   // Initialize Hive storage for local offline data
   await Hive.initFlutter();
 
-  // Register Hive generated/custom adapters
+  // Register Hive custom/generated adapters
   if (!Hive.isAdapterRegistered(0)) {
     Hive.registerAdapter(MoodEntryAdapter());
   }
   if (!Hive.isAdapterRegistered(1)) {
     Hive.registerAdapter(MoodColorPresetAdapter());
   }
+  if (!Hive.isAdapterRegistered(2)) {
+    Hive.registerAdapter(GeneralEntryAdapter());
+  }
 
   // Open required Hive storage boxes
   await Hive.openBox<MoodEntry>('mood_entries');
   await Hive.openBox<MoodColorPreset>('mood_color_presets');
+  await Hive.openBox<GeneralEntry>('general_entries');
+  final settingsBox = await Hive.openBox('settings_box');
+
+  // Initialize Notification Service
+  await NotificationService.init();
+
+  final isAppLockEnabled =
+      settingsBox.get('app_lock', defaultValue: false) as bool;
 
   runApp(
-    const ProviderScope(
-      child: MoodSphereApp(),
+    ProviderScope(
+      child: MoodSphereApp(isLocked: isAppLockEnabled),
     ),
   );
 }
 
-class MoodSphereApp extends StatelessWidget {
-  const MoodSphereApp({Key? key}) : super(key: key);
+class MoodSphereApp extends StatefulWidget {
+  final bool isLocked;
+
+  const MoodSphereApp({Key? key, required this.isLocked}) : super(key: key);
+
+  @override
+  State<MoodSphereApp> createState() => _MoodSphereAppState();
+}
+
+class _MoodSphereAppState extends State<MoodSphereApp> {
+  late bool _unlocked;
+
+  @override
+  void initState() {
+    super.initState();
+    _unlocked = !widget.isLocked;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,7 +90,15 @@ class MoodSphereApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const HomeScreen(),
+      home: _unlocked
+          ? const HomeScreen()
+          : AppLockScreen(
+              onUnlocked: () {
+                setState(() {
+                  _unlocked = true;
+                });
+              },
+            ),
     );
   }
 }
