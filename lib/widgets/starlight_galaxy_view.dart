@@ -24,20 +24,21 @@ class _StarlightGalaxyViewState extends State<StarlightGalaxyView>
   double _scale = 1.0;
   Offset _lastTouch = Offset.zero;
 
-  late AnimationController _rotationTickerController;
+  late AnimationController _spaceDriftController;
 
   @override
   void initState() {
     super.initState();
-    _rotationTickerController = AnimationController(
+    // Continuous 60 FPS Space Drift Ticker Animation
+    _spaceDriftController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 30),
+      duration: const Duration(seconds: 40),
     )..repeat();
   }
 
   @override
   void dispose() {
-    _rotationTickerController.dispose();
+    _spaceDriftController.dispose();
     super.dispose();
   }
 
@@ -48,12 +49,12 @@ class _StarlightGalaxyViewState extends State<StarlightGalaxyView>
     final radius = math.min(size.width, size.height) / 2.5 * _scale;
     final goldenRatio = (1 + math.sqrt(5)) / 2;
 
-    final cosmicAutoYaw = _rotationTickerController.value * 2 * math.pi;
-    final yaw = _userYaw + cosmicAutoYaw * 0.15;
-    final pitch = _userPitch + math.sin(cosmicAutoYaw) * 0.05;
+    final driftVal = _spaceDriftController.value * 2 * math.pi;
+    final yaw = _userYaw + driftVal * 0.12;
+    final pitch = _userPitch + math.sin(driftVal) * 0.04;
 
     MoodEntry? tappedEntry;
-    double minDistance = 32.0; // 32px hit radius threshold
+    double minDistance = 32.0;
 
     for (int i = 0; i < widget.entries.length; i++) {
       final entry = widget.entries[i];
@@ -109,20 +110,20 @@ class _StarlightGalaxyViewState extends State<StarlightGalaxyView>
           child: Container(
             color: const Color(0xFF05050B),
             child: AnimatedBuilder(
-              animation: _rotationTickerController,
+              animation: _spaceDriftController,
               builder: (context, child) {
-                final cosmicAutoYaw = _rotationTickerController.value * 2 * math.pi;
-                final totalYaw = _userYaw + cosmicAutoYaw * 0.15;
-                final totalPitch = _userPitch + math.sin(cosmicAutoYaw) * 0.05;
+                final driftVal = _spaceDriftController.value;
+                final totalYaw = _userYaw + driftVal * 2 * math.pi * 0.12;
+                final totalPitch = _userPitch + math.sin(driftVal * 2 * math.pi) * 0.04;
 
                 return CustomPaint(
                   size: size,
-                  painter: _GalaxyConstellationPainter(
+                  painter: _GalaxySpaceDriftPainter(
                     entries: widget.entries,
                     yaw: totalYaw,
                     pitch: totalPitch,
                     scale: _scale,
-                    tickerVal: _rotationTickerController.value,
+                    driftVal: driftVal,
                   ),
                 );
               },
@@ -134,19 +135,19 @@ class _StarlightGalaxyViewState extends State<StarlightGalaxyView>
   }
 }
 
-class _GalaxyConstellationPainter extends CustomPainter {
+class _GalaxySpaceDriftPainter extends CustomPainter {
   final List<MoodEntry> entries;
   final double yaw;
   final double pitch;
   final double scale;
-  final double tickerVal;
+  final double driftVal;
 
-  _GalaxyConstellationPainter({
+  _GalaxySpaceDriftPainter({
     required this.entries,
     required this.yaw,
     required this.pitch,
     required this.scale,
-    required this.tickerVal,
+    required this.driftVal,
   });
 
   @override
@@ -154,52 +155,44 @@ class _GalaxyConstellationPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = math.min(size.width, size.height) / 2.5 * scale;
 
-    // 1. Rich Deep Space Nebula Universe Backdrop (Indigo #0B001A, Magenta #1A002C, Navy #020B1A)
-    final nebulaPaint1 = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(-0.4, -0.5),
-        radius: 1.2,
-        colors: [
-          const Color(0xFF1A002C).withOpacity(0.75), // Cosmic Magenta
-          const Color(0xFF0B001A).withOpacity(0.55), // Deep Indigo
-          Colors.transparent,
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), nebulaPaint1);
+    // 1. Render 5 Parallax Nebula Dust Clouds Drifting & Looping Across Screen Boundaries
+    _drawParallaxDustClouds(canvas, size);
 
-    final nebulaPaint2 = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(0.5, 0.4),
-        radius: 1.3,
-        colors: [
-          const Color(0xFF020B1A).withOpacity(0.85), // Deep Navy
-          const Color(0xFF0B001A).withOpacity(0.4),
-          Colors.transparent,
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), nebulaPaint2);
+    // 2. Render 220 Background Stars Scattered Uniformly Across Vast 3D Volume [-600, 600]
+    final starRandom = math.Random(101);
+    final driftOffsetZ = (driftVal * 300) % 600;
 
-    // 2. Multilayered Star Field (1px to 3.5px) with Opacity Twinkling
-    final starRandom = math.Random(42);
-    for (int i = 0; i < 200; i++) {
-      final baseAngle = starRandom.nextDouble() * 2 * math.pi;
-      final distRadius = starRandom.nextDouble() * size.width * 0.8;
-      final currentAngle = baseAngle + yaw * 0.25;
+    for (int i = 0; i < 220; i++) {
+      // Uniform 3D Cartesian coordinates in [-600, 600]
+      final rawX = (starRandom.nextDouble() - 0.5) * 1200;
+      final rawY = (starRandom.nextDouble() - 0.5) * 1200;
+      final rawZ = (starRandom.nextDouble() - 0.5) * 1200 + driftOffsetZ;
 
-      final sx = center.dx + math.cos(currentAngle) * distRadius;
-      final sy = center.dy + math.sin(currentAngle + pitch * 0.2) * distRadius * 0.8;
+      // Wrap Z depth seamlessly
+      final wrappedZ = ((rawZ + 600) % 1200) - 600;
 
-      final sSize = starRandom.nextDouble() * 2.5 + 1.0;
-      final twinkleVal = math.sin((tickerVal * 2 * math.pi) + i) * 0.35 + 0.55;
+      // 3D Matrix Yaw/Pitch rotation
+      final rotX = rawX * math.cos(yaw) - wrappedZ * math.sin(yaw);
+      final rotZ = rawX * math.sin(yaw) + wrappedZ * math.cos(yaw);
+      final rotY = rawY * math.cos(pitch) - rotZ * math.sin(pitch);
 
-      final starPaint = Paint()
-        ..color = Colors.white.withOpacity(twinkleVal.clamp(0.2, 0.9));
-      canvas.drawCircle(Offset(sx, sy), sSize, starPaint);
+      final perspectiveFactor = (800.0 / (800.0 + rotZ)).clamp(0.2, 2.0);
+      final sx = center.dx + rotX * perspectiveFactor * 0.7;
+      final sy = center.dy + rotY * perspectiveFactor * 0.7;
+
+      if (sx >= -20 && sx <= size.width + 20 && sy >= -20 && sy <= size.height + 20) {
+        final sSize = (starRandom.nextDouble() * 2.0 + 0.8) * perspectiveFactor;
+        final twinkle = math.sin((driftVal * 4 * math.pi) + i) * 0.35 + 0.55;
+
+        final starPaint = Paint()
+          ..color = Colors.white.withOpacity(twinkle.clamp(0.15, 0.9));
+        canvas.drawCircle(Offset(sx, sy), sSize, starPaint);
+      }
     }
 
     if (entries.isEmpty) return;
 
-    // 3. Project Logged Mood Entries into 3D Independent Celestial Mood Stars (No Connecting Lines)
+    // 3. Project Mood Entries into 3D Independent Celestial Stars (No Lines)
     final starPoints = <Offset>[];
     final starColors = <Color>[];
 
@@ -227,31 +220,106 @@ class _GalaxyConstellationPainter extends CustomPainter {
       starColors.add(Color(entry.primaryColorValue));
     }
 
-    // 4. Render Independent Celestial Mood Stars with Glowing Radial Light Halos
+    // 4. Render Mood Stars with Multi-Layered Radial Light Halos
     for (int i = 0; i < starPoints.length; i++) {
       final pos = starPoints[i];
       final color = starColors[i];
 
-      // Multi-layered radial light halo shader
       final outerHaloPaint = Paint()
         ..shader = RadialGradient(
           colors: [
-            color.withOpacity(0.75),
-            color.withOpacity(0.25),
+            color.withOpacity(0.85),
+            color.withOpacity(0.3),
             Colors.transparent,
           ],
           stops: const [0.0, 0.5, 1.0],
-        ).createShader(Rect.fromCircle(center: pos, radius: 24))
+        ).createShader(Rect.fromCircle(center: pos, radius: 26))
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
 
-      canvas.drawCircle(pos, 24, outerHaloPaint);
+      canvas.drawCircle(pos, 26, outerHaloPaint);
 
-      // Inner Core Highlight
       final corePaint = Paint()..color = Colors.white;
       canvas.drawCircle(pos, 5.5, corePaint);
     }
   }
 
+  void _drawParallaxDustClouds(Canvas canvas, Size size) {
+    // 5 Parallax Nebula Dust Cloud Layers drifting at varied speeds across screen boundaries
+    final clouds = [
+      // Cosmic Purple #2A004F
+      _DustCloudSpec(
+        baseCenter: Offset(size.width * 0.2, size.height * 0.3),
+        radius: size.width * 0.7,
+        color: const Color(0xFF2A004F),
+        speedX: 0.25,
+        speedY: 0.1,
+      ),
+      // Deep Teal #002A38
+      _DustCloudSpec(
+        baseCenter: Offset(size.width * 0.75, size.height * 0.65),
+        radius: size.width * 0.8,
+        color: const Color(0xFF002A38),
+        speedX: -0.3,
+        speedY: 0.15,
+      ),
+      // Magenta #3B0029
+      _DustCloudSpec(
+        baseCenter: Offset(size.width * 0.4, size.height * 0.8),
+        radius: size.width * 0.65,
+        color: const Color(0xFF3B0029),
+        speedX: 0.35,
+        speedY: -0.2,
+      ),
+      // Indigo Nebula
+      _DustCloudSpec(
+        baseCenter: Offset(size.width * 0.85, size.height * 0.25),
+        radius: size.width * 0.6,
+        color: const Color(0xFF16003B),
+        speedX: -0.2,
+        speedY: -0.15,
+      ),
+    ];
+
+    for (var cloud in clouds) {
+      // Parallax drifting & looping offset math
+      final offsetX = (driftVal * size.width * cloud.speedX) % (size.width * 1.4);
+      final offsetY = (driftVal * size.height * cloud.speedY) % (size.height * 1.4);
+
+      final currentPos = Offset(
+        (cloud.baseCenter.dx + offsetX) % (size.width + cloud.radius) - (cloud.radius * 0.5),
+        (cloud.baseCenter.dy + offsetY) % (size.height + cloud.radius) - (cloud.radius * 0.5),
+      );
+
+      final cloudPaint = Paint()
+        ..shader = RadialGradient(
+          colors: [
+            cloud.color.withOpacity(0.55),
+            cloud.color.withOpacity(0.2),
+            Colors.transparent,
+          ],
+          stops: const [0.0, 0.55, 1.0],
+        ).createShader(Rect.fromCircle(center: currentPos, radius: cloud.radius));
+
+      canvas.drawCircle(currentPos, cloud.radius, cloudPaint);
+    }
+  }
+
   @override
-  bool shouldRepaint(covariant _GalaxyConstellationPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _GalaxySpaceDriftPainter oldDelegate) => true;
+}
+
+class _DustCloudSpec {
+  final Offset baseCenter;
+  final double radius;
+  final Color color;
+  final double speedX;
+  final double speedY;
+
+  _DustCloudSpec({
+    required this.baseCenter,
+    required this.radius,
+    required this.color,
+    required this.speedX,
+    required this.speedY,
+  });
 }
