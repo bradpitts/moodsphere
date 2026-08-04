@@ -17,7 +17,6 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen> {
   final List<PaintPoint> _points = [];
   final TextEditingController _noteController = TextEditingController();
 
-  // Preset palette fallback list
   final List<Color> _presetColors = const [
     Color(0xFFFFD700), // Joy
     Color(0xFF4A90E2), // Calm
@@ -154,7 +153,6 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen> {
                   note: _noteController.text.isEmpty ? null : _noteController.text,
                 );
                 
-                // Uses moodNotifierProvider from mood_provider.dart
                 await ref.read(moodNotifierProvider.notifier).addEntry(newEntry);
                 
                 if (mounted) Navigator.pop(context);
