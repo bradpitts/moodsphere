@@ -1,21 +1,20 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../models/mood_entry.dart';
-import '../models/general_entry.dart';
 import '../providers/mood_provider.dart';
-import '../providers/general_entry_provider.dart';
-import '../widgets/galaxy_3d_view.dart';
-import '../widgets/calendar_view_widget.dart';
-import 'paint_orb_screen.dart';
-import 'general_entry_screen.dart';
+import '../widgets/native_3d_sphere.dart';
+import '../widgets/starlight_galaxy_view.dart';
+import '../widgets/entry_detail_sheet.dart';
+import '../widgets/orb_painter.dart';
+import 'create_wizard_screen.dart';
+import 'calendar_screen.dart';
+import 'profile_screen.dart';
 import 'settings_screen.dart';
 
-enum ViewMode { galaxy3d, timelineList, calendar }
+enum View3DMode { glassSphere, constellation }
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -25,173 +24,43 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  ViewMode _viewMode = ViewMode.galaxy3d;
-  int _activeTabIndex = 0; // 0: Mood Orbs, 1: Freeform Journal
+  View3DMode _viewMode = View3DMode.glassSphere;
 
-  void _showMoodDetailSheet(MoodEntry entry) {
-    final color = Color(entry.colorValue);
-    final formattedDate =
-        DateFormat('EEEE, MMMM d, yyyy • h:mm a').format(entry.date);
-
+  void _showDetailSheet(MoodEntry entry) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E1E2C),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      backgroundColor: Colors.transparent,
+      builder: (context) => EntryDetailSheet(
+        entry: entry,
+        onDelete: () {
+          ref.read(moodNotifierProvider.notifier).deleteEntry(entry.id);
+        },
       ),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 38,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: color,
-                      boxShadow: [
-                        BoxShadow(
-                          color: color.withOpacity(0.6),
-                          blurRadius: 16,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Mood Entry',
-                          style: GoogleFonts.inter(
-                            color: Colors.white54,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          formattedDate,
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline,
-                        color: Colors.redAccent),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      ref
-                          .read(moodNotifierProvider.notifier)
-                          .deleteEntry(entry.id);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Text('Mood entry deleted'),
-                          backgroundColor: Colors.grey.shade900,
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 20),
-
-              if (entry.note != null && entry.note!.isNotEmpty) ...[
-                Text(
-                  'REFLECTION',
-                  style: GoogleFonts.inter(
-                    color: Colors.white38,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.1,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF121212),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.06),
-                    ),
-                  ),
-                  child: Text(
-                    entry.note!,
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 14,
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-              ],
-
-              if (entry.photoPath != null &&
-                  File(entry.photoPath!).existsSync()) ...[
-                Text(
-                  'ATTACHED PHOTO',
-                  style: GoogleFonts.inter(
-                    color: Colors.white38,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.1,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: Image.file(
-                    File(entry.photoPath!),
-                    width: double.infinity,
-                    height: 160,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                const SizedBox(height: 18),
-              ],
-
-              const SizedBox(height: 8),
-            ],
-          ),
-        );
-      },
     );
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning!';
+    if (hour < 17) return 'Good afternoon!';
+    return 'Good evening!';
   }
 
   @override
   Widget build(BuildContext context) {
-    final moodEntries = ref.watch(moodNotifierProvider);
-    final generalEntries = ref.watch(generalEntryNotifierProvider);
+    final entries = ref.watch(moodNotifierProvider);
     final hasLoggedToday = ref.watch(hasLoggedTodayProvider);
+
+    MoodEntry? todayEntry;
+    final now = DateTime.now();
+    for (var e in entries) {
+      if (e.date.year == now.year &&
+          e.date.month == now.month &&
+          e.date.day == now.day) {
+        todayEntry = e;
+        break;
+      }
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
@@ -203,474 +72,288 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'MoodSphere',
+              _getGreeting(),
               style: GoogleFonts.inter(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
-                fontSize: 22,
-                letterSpacing: -0.5,
+                fontSize: 20,
               ),
             ),
             Text(
-              _activeTabIndex == 0
-                  ? '3D Galaxy & Mood History'
-                  : 'Freeform Reflection Journal',
+              'MoodSphere · Galaxy Explorer',
               style: GoogleFonts.inter(
                 color: Colors.white38,
-                fontWeight: FontWeight.w400,
-                fontSize: 12,
+                fontSize: 11,
               ),
             ),
           ],
         ),
         actions: [
-          if (_activeTabIndex == 0) ...[
-            // View Mode Cycle Toggle (3D Galaxy -> List -> Calendar)
-            IconButton(
-              icon: Icon(
-                _viewMode == ViewMode.galaxy3d
-                    ? Icons.blur_circular
-                    : _viewMode == ViewMode.timelineList
-                        ? Icons.format_list_bulleted
-                        : Icons.calendar_month_outlined,
-                color: const Color(0xFFFFD700),
-                size: 22,
-              ),
-              tooltip: 'Cycle View Mode',
-              onPressed: () {
-                setState(() {
-                  if (_viewMode == ViewMode.galaxy3d) {
-                    _viewMode = ViewMode.timelineList;
-                  } else if (_viewMode == ViewMode.timelineList) {
-                    _viewMode = ViewMode.calendar;
-                  } else {
-                    _viewMode = ViewMode.galaxy3d;
-                  }
-                });
-              },
-            ),
-          ],
-
-          // Settings Screen Button
+          IconButton(
+            icon: const Icon(Icons.calendar_month_outlined, color: Colors.white70),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const CalendarScreen()),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.person_outline, color: Colors.white70),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const ProfileScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.settings_outlined, color: Colors.white70),
             onPressed: () {
               Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const SettingsScreen(),
-                ),
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
               );
             },
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 4),
         ],
       ),
       body: SafeArea(
         child: Column(
           children: [
-            // Tab Switcher Bar (Mood Orbs vs General Journal)
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1E2C),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white.withOpacity(0.06)),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _activeTabIndex = 0),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _activeTabIndex == 0
-                              ? const Color(0xFFFFD700)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          'Mood Galaxy',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(
-                            color: _activeTabIndex == 0
-                                ? Colors.black
-                                : Colors.white60,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
+            const SizedBox(height: 6),
+
+            // Top 7-Day Week Ribbon (Mon–Sun)
+            _buildWeekRibbon(context, entries),
+
+            const SizedBox(height: 12),
+
+            // Today's Mood Breakdown Header
+            if (todayEntry != null && todayEntry.moodPercentages.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E2C),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white.withOpacity(0.06)),
+                  ),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: CustomPaint(
+                          painter: OrbPainter(
+                            strokePoints: const [],
+                            primaryColor: Color(todayEntry.primaryColorValue),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _activeTabIndex = 1),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _activeTabIndex == 1
-                              ? const Color(0xFFFFD700)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          'Journal Entries',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(
-                            color: _activeTabIndex == 1
-                                ? Colors.black
-                                : Colors.white60,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: todayEntry.moodPercentages.entries.map((e) {
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: Chip(
+                                  visualDensity: VisualDensity.compact,
+                                  backgroundColor: const Color(0xFF121212),
+                                  label: Text(
+                                    '${e.key} ${e.value.toInt()}%',
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  side: BorderSide(
+                                    color: Color(todayEntry!.primaryColorValue)
+                                        .withOpacity(0.5),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
                           ),
                         ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+
+            // Dual 3D Visual Engine (Glass Sphere vs Starlight Constellation)
+            Expanded(
+              child: Stack(
+                children: [
+                  _viewMode == View3DMode.glassSphere
+                      ? Native3DSphere(
+                          entries: entries,
+                          onBeadTap: (entry) => _showDetailSheet(entry),
+                        )
+                      : StarlightGalaxyView(
+                          entries: entries,
+                          onStarTap: (entry) => _showDetailSheet(entry),
+                        ),
+
+                  // Floating Toggle Switch: Glass Sphere <-> Constellation
+                  Positioned(
+                    top: 14,
+                    right: 14,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E1E2C),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white.withOpacity(0.1)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.4),
+                            blurRadius: 10,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          GestureDetector(
+                            onTap: () =>
+                                setState(() => _viewMode = View3DMode.glassSphere),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: _viewMode == View3DMode.glassSphere
+                                    ? const Color(0xFFFFD700)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                '3D Sphere',
+                                style: GoogleFonts.inter(
+                                  color: _viewMode == View3DMode.glassSphere
+                                      ? Colors.black
+                                      : Colors.white60,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => setState(
+                                () => _viewMode = View3DMode.constellation),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: _viewMode == View3DMode.constellation
+                                    ? const Color(0xFF7C3AED)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                'Constellation',
+                                style: GoogleFonts.inter(
+                                  color: _viewMode == View3DMode.constellation
+                                      ? Colors.white
+                                      : Colors.white60,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-
-            // Tab Content
-            Expanded(
-              child: _activeTabIndex == 0
-                  ? _buildMoodTabContent(context, moodEntries)
-                  : _buildGeneralJournalTabContent(context, generalEntries),
-            ),
           ],
         ),
       ),
-      floatingActionButton: _activeTabIndex == 0
-          ? _buildFAB(context, hasLoggedToday)
-          : FloatingActionButton.extended(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const GeneralEntryScreen(),
-                  ),
-                );
-              },
-              backgroundColor: const Color(0xFFFFD700),
-              foregroundColor: Colors.black,
-              icon: const Icon(Icons.edit_note, color: Colors.black),
-              label: Text(
-                'New Journal',
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                  color: Colors.black,
-                ),
-              ),
-            ),
+      floatingActionButton: _buildFAB(context, hasLoggedToday),
     );
   }
 
-  Widget _buildMoodTabContent(BuildContext context, List<MoodEntry> entries) {
-    if (entries.isEmpty) return _buildEmptyState(context);
+  Widget _buildWeekRibbon(BuildContext context, List<MoodEntry> entries) {
+    final now = DateTime.now();
+    // Monday of current week
+    final monday = now.subtract(Duration(days: now.weekday - 1));
 
-    switch (_viewMode) {
-      case ViewMode.galaxy3d:
-        return Galaxy3DView(
-          entries: entries,
-          onBeadSelected: (entryId) {
-            final match = entries.firstWhere(
-              (e) => e.id == entryId,
-              orElse: () => entries.first,
-            );
-            _showMoodDetailSheet(match);
-          },
-        );
-      case ViewMode.calendar:
-        return CalendarViewWidget(
-          entries: entries,
-          onDateSelected: (entry) => _showMoodDetailSheet(entry),
-        );
-      case ViewMode.timelineList:
-        return _buildEntryList(context, entries);
-    }
-  }
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 18),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E2C),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: List.generate(7, (index) {
+          final dayDate = monday.add(Duration(days: index));
+          final dayName = DateFormat('E').format(dayDate).substring(0, 3);
 
-  Widget _buildGeneralJournalTabContent(
-      BuildContext context, List<GeneralEntry> entries) {
-    if (entries.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          MoodEntry? entryForDay;
+          for (var e in entries) {
+            if (e.date.year == dayDate.year &&
+                e.date.month == dayDate.month &&
+                e.date.day == dayDate.day) {
+              entryForDay = e;
+              break;
+            }
+          }
+
+          final isLogged = entryForDay != null;
+
+          return Column(
             children: [
-              const Icon(
-                Icons.book_outlined,
-                size: 54,
-                color: Colors.white38,
-              ),
-              const SizedBox(height: 16),
               Text(
-                'No Freeform Entries Yet',
+                dayName,
                 style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 18,
+                  color: Colors.white54,
+                  fontSize: 11,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 6),
-              Text(
-                'Write personal notes, thoughts, and longform journal entries stored safely offline.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(color: Colors.white54, fontSize: 13),
-              ),
+              isLogged
+                  ? GestureDetector(
+                      onTap: () => _showDetailSheet(entryForDay!),
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(entryForDay.primaryColorValue),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Color(entryForDay.primaryColorValue)
+                                  .withOpacity(0.5),
+                              blurRadius: 6,
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white24, width: 1.5),
+                      ),
+                    ),
             ],
-          ),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-      itemCount: entries.length,
-      itemBuilder: (context, index) {
-        final entry = entries[index];
-        final formattedDate =
-            DateFormat('EEEE, MMM d, yyyy • h:mm a').format(entry.date);
-
-        return Dismissible(
-          key: Key(entry.id),
-          direction: DismissDirection.endToStart,
-          background: Container(
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 20),
-            margin: const EdgeInsets.only(bottom: 14),
-            decoration: BoxDecoration(
-              color: Colors.redAccent.shade700,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: const Icon(Icons.delete_outline, color: Colors.white, size: 24),
-          ),
-          onDismissed: (_) {
-            ref
-                .read(generalEntryNotifierProvider.notifier)
-                .deleteEntry(entry.id);
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 14),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E1E2C),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white.withOpacity(0.06)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        entry.title,
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      formattedDate,
-                      style: GoogleFonts.inter(
-                        color: Colors.white38,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  entry.content,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    color: Colors.white70,
-                    fontSize: 14,
-                    height: 1.3,
-                  ),
-                ),
-                if (entry.photoPath != null &&
-                    File(entry.photoPath!).existsSync()) ...[
-                  const SizedBox(height: 12),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.file(
-                      File(entry.photoPath!),
-                      height: 120,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 110,
-              height: 110,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFFFFD700).withOpacity(0.6),
-                    const Color(0xFF121212),
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFFFD700).withOpacity(0.3),
-                    blurRadius: 30,
-                    spreadRadius: 5,
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.blur_circular,
-                size: 54,
-                color: Colors.white,
-              ),
-            ).animate().scale(duration: 800.ms, curve: Curves.elasticOut),
-            const SizedBox(height: 24),
-            Text(
-              'No Mood Orbs in Orbit',
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Tap the button below to paint your first mood entry into the 3D Galaxy Sphere.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                color: Colors.white54,
-                fontSize: 14,
-                height: 1.4,
-              ),
-            ),
-          ],
-        ),
+          );
+        }),
       ),
-    );
-  }
-
-  Widget _buildEntryList(BuildContext context, List<MoodEntry> entries) {
-    return ListView.builder(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-      itemCount: entries.length,
-      itemBuilder: (context, index) {
-        final entry = entries[index];
-        final color = Color(entry.colorValue);
-        final formattedDate =
-            DateFormat('EEEE, MMM d, yyyy • h:mm a').format(entry.date);
-
-        return GestureDetector(
-          onTap: () => _showMoodDetailSheet(entry),
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 14),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E1E2C),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.06),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: color,
-                    boxShadow: [
-                      BoxShadow(
-                        color: color.withOpacity(0.6),
-                        blurRadius: 12,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        formattedDate,
-                        style: GoogleFonts.inter(
-                          color: Colors.white70,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      if (entry.note != null && entry.note!.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          entry.note!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (entry.photoPath != null &&
-                    File(entry.photoPath!).existsSync()) ...[
-                  const SizedBox(width: 12),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.file(
-                      File(entry.photoPath!),
-                      width: 44,
-                      height: 44,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ).animate().fadeIn(duration: 400.ms, delay: (index * 60).ms),
-        );
-      },
     );
   }
 
@@ -699,16 +382,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       onPressed: () {
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (context) => const PaintOrbScreen(),
+            builder: (context) => const CreateWizardScreen(),
           ),
         );
       },
       backgroundColor: const Color(0xFFFFD700),
       foregroundColor: Colors.black,
       elevation: 6,
-      icon: const Icon(Icons.add, color: Colors.black),
+      icon: const Icon(Icons.palette_outlined, color: Colors.black),
       label: Text(
-        'Paint Mood',
+        'Paint Mood Wizard',
         style: GoogleFonts.inter(
           fontWeight: FontWeight.w700,
           fontSize: 15,

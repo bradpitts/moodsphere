@@ -14,26 +14,35 @@ class MoodEntryAdapter extends TypeAdapter<MoodEntry> {
     return MoodEntry(
       id: fields[0] as String,
       date: fields[1] as DateTime,
-      colorValue: fields[2] as int,
-      note: fields[3] as String?,
-      photoPath: fields[4] as String?,
+      primaryColorValue: fields[2] as int,
+      moodPercentages: (fields[3] as Map).cast<String, double>(),
+      stateTags: (fields[4] as List).cast<String>(),
+      note: fields[5] as String?,
+      photoPaths: (fields[6] as List?)?.cast<String>(),
+      strokeDataJson: fields[7] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, MoodEntry obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
       ..write(obj.date)
       ..writeByte(2)
-      ..write(obj.colorValue)
+      ..write(obj.primaryColorValue)
       ..writeByte(3)
-      ..write(obj.note)
+      ..write(obj.moodPercentages)
       ..writeByte(4)
-      ..write(obj.photoPath);
+      ..write(obj.stateTags)
+      ..writeByte(5)
+      ..write(obj.note)
+      ..writeByte(6)
+      ..write(obj.photoPaths)
+      ..writeByte(7)
+      ..write(obj.strokeDataJson);
   }
 
   @override

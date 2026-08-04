@@ -11,35 +11,53 @@ class MoodEntry extends HiveObject {
   final DateTime date;
 
   @HiveField(2)
-  final int colorValue;
+  final int primaryColorValue;
 
   @HiveField(3)
-  final String? note;
+  final Map<String, double> moodPercentages;
 
   @HiveField(4)
-  final String? photoPath;
+  final List<String> stateTags;
+
+  @HiveField(5)
+  final String? note;
+
+  @HiveField(6)
+  final List<String>? photoPaths;
+
+  @HiveField(7)
+  final String? strokeDataJson;
 
   MoodEntry({
     required this.id,
     required this.date,
-    required this.colorValue,
+    required this.primaryColorValue,
+    required this.moodPercentages,
+    required this.stateTags,
     this.note,
-    this.photoPath,
+    this.photoPaths,
+    this.strokeDataJson,
   });
 
   MoodEntry copyWith({
     String? id,
     DateTime? date,
-    int? colorValue,
+    int? primaryColorValue,
+    Map<String, double>? moodPercentages,
+    List<String>? stateTags,
     String? note,
-    String? photoPath,
+    List<String>? photoPaths,
+    String? strokeDataJson,
   }) {
     return MoodEntry(
       id: id ?? this.id,
       date: date ?? this.date,
-      colorValue: colorValue ?? this.colorValue,
+      primaryColorValue: primaryColorValue ?? this.primaryColorValue,
+      moodPercentages: moodPercentages ?? this.moodPercentages,
+      stateTags: stateTags ?? this.stateTags,
       note: note ?? this.note,
-      photoPath: photoPath ?? this.photoPath,
+      photoPaths: photoPaths ?? this.photoPaths,
+      strokeDataJson: strokeDataJson ?? this.strokeDataJson,
     );
   }
 }
