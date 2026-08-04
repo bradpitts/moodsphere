@@ -27,6 +27,35 @@ jobs:
       - name: Generate Missing Android Folder
         run: flutter create . --platforms=android --org com.moodsphere
 
+      - name: Enable Java Desugaring for Notifications
+        run: |
+          python3 -c "
+          import os
+
+          gradle_path = 'android/app/build.gradle'
+          kts_path = 'android/app/build.gradle.kts'
+
+          if os.path.exists(kts_path):
+              with open(kts_path, 'r') as f:
+                  content = f.read()
+              if 'isCoreLibraryDesugaringEnabled' not in content:
+                  content = content.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true')
+                  content += '\ndependencies {\n    coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.0.4\")\n}\n'
+                  with open(kts_path, 'w') as f:
+                      f.write(content)
+              print('Patched build.gradle.kts for Desugaring successfully.')
+
+          elif os.path.exists(gradle_path):
+              with open(gradle_path, 'r') as f:
+                  content = f.read()
+              if 'coreLibraryDesugaringEnabled' not in content:
+                  content = content.replace('compileOptions {', 'compileOptions {\n        coreLibraryDesugaringEnabled true')
+                  content += '\ndependencies {\n    coreLibraryDesugaring \"com.android.tools:desugar_jdk_libs:2.0.4\"\n}\n'
+                  with open(gradle_path, 'w') as f:
+                      f.write(content)
+              print('Patched build.gradle for Desugaring successfully.')
+          "
+
       - name: Install Dependencies
         run: flutter pub get
 
