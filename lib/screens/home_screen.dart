@@ -49,7 +49,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final entries = ref.watch(moodNotifierProvider);
-    final hasLoggedToday = ref.watch(hasLoggedTodayProvider);
 
     MoodEntry? todayEntry;
     final now = DateTime.now();
@@ -277,7 +276,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
       ),
-      floatingActionButton: _buildFAB(context, hasLoggedToday),
+      floatingActionButton: _buildFAB(context),
     );
   }
 
@@ -357,27 +356,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _buildFAB(BuildContext context, bool hasLoggedToday) {
-    if (hasLoggedToday) {
-      return Tooltip(
-        message: 'You have already logged your mood today!',
-        child: FloatingActionButton.extended(
-          onPressed: null,
-          backgroundColor: Colors.grey.shade800,
-          foregroundColor: Colors.white38,
-          elevation: 0,
-          icon: const Icon(Icons.check_circle_outline, color: Colors.white38),
-          label: Text(
-            'Logged Today',
-            style: GoogleFonts.inter(
-              fontWeight: FontWeight.w600,
-              color: Colors.white38,
-            ),
-          ),
-        ),
-      );
-    }
-
+  // Unlocked Floating Action Button for Testing (Always Enabled "+ Paint New Mood Orb")
+  Widget _buildFAB(BuildContext context) {
     return FloatingActionButton.extended(
       onPressed: () {
         Navigator.of(context).push(
@@ -391,7 +371,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       elevation: 6,
       icon: const Icon(Icons.palette_outlined, color: Colors.black),
       label: Text(
-        'Paint Mood Wizard',
+        '+ Paint New Mood Orb',
         style: GoogleFonts.inter(
           fontWeight: FontWeight.w700,
           fontSize: 15,

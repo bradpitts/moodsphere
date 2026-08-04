@@ -55,17 +55,11 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
     MoodPaletteItem('Neutral', Color(0xFFE5E5EA)),
   ];
 
-  // Step 2: State Selection
-  final List<String> _availableStateTags = [
-    'Energetic', 'Tired', 'Focused', 'Calm', 'Stressed', 'Inspired'
-  ];
-  final Set<String> _selectedStateTags = {'Calm', 'Focused'};
-
-  // Step 3: Media
+  // Step 2: Media Attachments
   final List<String> _photoPaths = [];
   final ImagePicker _picker = ImagePicker();
 
-  // Step 4: Diary Note
+  // Step 3: Diary Note
   final TextEditingController _noteController = TextEditingController();
   bool _isSaving = false;
 
@@ -151,7 +145,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
       date: DateTime.now(),
       primaryColorValue: _selectedMood.color.value,
       moodPercentages: Map.from(_moodPercentages),
-      stateTags: _selectedStateTags.toList(),
+      stateTags: const [], // Default empty state tags for 3-step wizard
       note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
       photoPaths: _photoPaths.isEmpty ? null : List.from(_photoPaths),
     );
@@ -164,7 +158,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
   }
 
   void _nextPage() {
-    if (_currentStep < 3) {
+    if (_currentStep < 2) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 350),
         curve: Curves.easeInOut,
@@ -184,7 +178,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          'Step ${_currentStep + 1} of 4',
+          'Step ${_currentStep + 1} of 3',
           style: GoogleFonts.inter(
             color: Colors.white70,
             fontSize: 15,
@@ -195,7 +189,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(6),
           child: LinearProgressIndicator(
-            value: (_currentStep + 1) / 4.0,
+            value: (_currentStep + 1) / 3.0,
             backgroundColor: Colors.white10,
             valueColor: AlwaysStoppedAnimation<Color>(_selectedMood.color),
           ),
@@ -211,15 +205,14 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
         },
         children: [
           _buildStep1PaintCanvas(context),
-          _buildStep2StateSelection(context),
-          _buildStep3MediaAttachments(context),
-          _buildStep4DiaryNote(context),
+          _buildStep2MediaAttachments(context),
+          _buildStep3DiaryNote(context),
         ],
       ),
     );
   }
 
-  // --- STEP 1: PAINT CANVAS & DUAL ARC PALETTE ---
+  // --- STEP 1 OF 3: PAINT CANVAS & DUAL ARC PALETTE ---
   Widget _buildStep1PaintCanvas(BuildContext context) {
     final activePalette =
         _isPositivePalette ? positivePalette : negativePalette;
@@ -385,7 +378,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
 
         const SizedBox(height: 14),
 
-        // Bottom Controls: Brush Drawer Popup & Next Button
+        // Bottom Controls: Brush Drawer Popup & Next Button ("Next: Attachments")
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           child: Row(
@@ -407,7 +400,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
                     ),
                   ),
                   child: Text(
-                    'Next: State Selection',
+                    'Next: Attachments',
                     style: GoogleFonts.inter(
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
@@ -502,102 +495,8 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
     );
   }
 
-  // --- STEP 2: STATE SELECTION ---
-  Widget _buildStep2StateSelection(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          const SizedBox(height: 12),
-
-          // Orb Preview
-          SizedBox(
-            width: 140,
-            height: 140,
-            child: CustomPaint(
-              painter: OrbPainter(
-                strokePoints: _strokePoints,
-                primaryColor: _selectedMood.color,
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          Text(
-            'What state are you in today?',
-            style: GoogleFonts.inter(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Select tags that describe your physical & emotional state.',
-            style: GoogleFonts.inter(color: Colors.white54, fontSize: 13),
-          ),
-
-          const SizedBox(height: 28),
-
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: _availableStateTags.map((tag) {
-              final isSelected = _selectedStateTags.contains(tag);
-              return FilterChip(
-                label: Text(tag),
-                selected: isSelected,
-                selectedColor: _selectedMood.color,
-                labelStyle: GoogleFonts.inter(
-                  color: isSelected ? Colors.black : Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-                backgroundColor: const Color(0xFF1E1E2C),
-                onSelected: (selected) {
-                  setState(() {
-                    if (selected) {
-                      _selectedStateTags.add(tag);
-                    } else {
-                      _selectedStateTags.remove(tag);
-                    }
-                  });
-                },
-              );
-            }).toList(),
-          ),
-
-          const Spacer(),
-
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: _nextPage,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _selectedMood.color,
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: Text(
-                'Next: Attachments',
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- STEP 3: MEDIA ATTACHMENTS ---
-  Widget _buildStep3MediaAttachments(BuildContext context) {
+  // --- STEP 2 OF 3: MEDIA ATTACHMENTS ---
+  Widget _buildStep2MediaAttachments(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -713,8 +612,8 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
     );
   }
 
-  // --- STEP 4: DIARY REFLECTION NOTE ---
-  Widget _buildStep4DiaryNote(BuildContext context) {
+  // --- STEP 3 OF 3: DIARY REFLECTION NOTE & SAVE ---
+  Widget _buildStep3DiaryNote(BuildContext context) {
     return ScaleTransition(
       scale: _flyScaleAnimation,
       child: Padding(

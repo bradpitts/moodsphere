@@ -19,25 +19,26 @@ class StarlightGalaxyView extends StatefulWidget {
 
 class _StarlightGalaxyViewState extends State<StarlightGalaxyView>
     with SingleTickerProviderStateMixin {
-  double _yaw = 0.0;
-  double _pitch = 0.0;
+  double _userYaw = 0.0;
+  double _userPitch = 0.0;
   double _scale = 1.0;
   Offset _lastTouch = Offset.zero;
 
-  late AnimationController _twinkleController;
+  late AnimationController _rotationTickerController;
 
   @override
   void initState() {
     super.initState();
-    _twinkleController = AnimationController(
+    // Continuous 60 FPS Ticker Animation Controller for Cosmic Slow Motion
+    _rotationTickerController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 3),
-    )..repeat(reverse: true);
+      duration: const Duration(seconds: 30),
+    )..repeat();
   }
 
   @override
   void dispose() {
-    _twinkleController.dispose();
+    _rotationTickerController.dispose();
     super.dispose();
   }
 
@@ -55,24 +56,29 @@ class _StarlightGalaxyViewState extends State<StarlightGalaxyView>
             setState(() {
               _scale = (_scale * details.scale).clamp(0.6, 2.5);
               final delta = details.focalPoint - _lastTouch;
-              _yaw += delta.dx * 0.006;
-              _pitch += delta.dy * 0.006;
+              _userYaw += delta.dx * 0.006;
+              _userPitch += delta.dy * 0.006;
               _lastTouch = details.focalPoint;
             });
           },
           child: Container(
             color: const Color(0xFF05050B),
             child: AnimatedBuilder(
-              animation: _twinkleController,
+              animation: _rotationTickerController,
               builder: (context, child) {
+                // Combine continuous cosmic background rotation with user touch rotation
+                final cosmicAutoYaw = _rotationTickerController.value * 2 * math.pi;
+                final totalYaw = _userYaw + cosmicAutoYaw * 0.15;
+                final totalPitch = _userPitch + math.sin(cosmicAutoYaw) * 0.05;
+
                 return CustomPaint(
                   size: size,
                   painter: _GalaxyConstellationPainter(
                     entries: widget.entries,
-                    yaw: _yaw,
-                    pitch: _pitch,
+                    yaw: totalYaw,
+                    pitch: totalPitch,
                     scale: _scale,
-                    twinkle: _twinkleController.value,
+                    tickerVal: _rotationTickerController.value,
                   ),
                 );
               },
@@ -89,14 +95,14 @@ class _GalaxyConstellationPainter extends CustomPainter {
   final double yaw;
   final double pitch;
   final double scale;
-  final double twinkle;
+  final double tickerVal;
 
   _GalaxyConstellationPainter({
     required this.entries,
     required this.yaw,
     required this.pitch,
     required this.scale,
-    required this.twinkle,
+    required this.tickerVal,
   });
 
   @override
@@ -104,15 +110,21 @@ class _GalaxyConstellationPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = math.min(size.width, size.height) / 2.5 * scale;
 
-    // 1. Render 150+ Background Twinkling Stardust Particles
+    // 1. Render 180+ Background Twinkling & Rotating Stardust Particles
     final starRandom = math.Random(42);
-    for (int i = 0; i < 160; i++) {
-      final sx = (starRandom.nextDouble() - 0.5) * size.width * 1.5 + center.dx;
-      final sy = (starRandom.nextDouble() - 0.5) * size.height * 1.5 + center.dy;
-      final sSize = starRandom.nextDouble() * 2.2 + 0.5;
-      final opacity = ((starRandom.nextDouble() + twinkle) / 2.0).clamp(0.15, 0.7);
+    for (int i = 0; i < 180; i++) {
+      final baseAngle = starRandom.nextDouble() * 2 * math.pi;
+      final distRadius = starRandom.nextDouble() * size.width * 0.7;
+      final currentAngle = baseAngle + yaw * 0.3;
 
-      final starPaint = Paint()..color = Colors.white.withOpacity(opacity);
+      final sx = center.dx + math.cos(currentAngle) * distRadius;
+      final sy = center.dy + math.sin(currentAngle + pitch * 0.2) * distRadius * 0.8;
+
+      final sSize = starRandom.nextDouble() * 2.2 + 0.6;
+      final twinkleVal = math.sin((tickerVal * 2 * math.pi) + i) * 0.3 + 0.5;
+
+      final starPaint = Paint()
+        ..color = Colors.white.withOpacity(twinkleVal.clamp(0.15, 0.8));
       canvas.drawCircle(Offset(sx, sy), sSize, starPaint);
     }
 
@@ -146,41 +158,58 @@ class _GalaxyConstellationPainter extends CustomPainter {
       starColors.add(Color(entry.primaryColorValue));
     }
 
-    // 3. Draw Glowing Stardust Constellation Lines Connecting Consecutive Logged Stars
+    // 3. Shimmering Stardust Constellation Lines Linking Consecutive Stars
     for (int i = 0; i < starPoints.length - 1; i++) {
+      final shimmerOpacity = (0.2 + (math.sin(tickerVal * 2 * math.pi + i) * 0.15)).clamp(0.1, 0.45);
+
       final linePaint = Paint()
-        ..color = starColors[i].withOpacity(0.35)
+        ..color = starColors[i].withOpacity(shimmerOpacity)
         ..strokeWidth = 1.8
         ..style = PaintingStyle.stroke;
 
       final lineGlowPaint = Paint()
         ..color = starColors[i].withOpacity(0.15)
-        ..strokeWidth = 4.0
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+        ..strokeWidth = 4.5
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
 
       canvas.drawLine(starPoints[i], starPoints[i + 1], lineGlowPaint);
       canvas.drawLine(starPoints[i], starPoints[i + 1], linePaint);
     }
 
-    // 4. Draw Mood Entry Stars with Radial Shaders & Glows
+    // 4. Multi-Layered Glowing Star Shaders & Warm Red Atmospheric Halos
     for (int i = 0; i < starPoints.length; i++) {
       final pos = starPoints[i];
       final color = starColors[i];
 
-      // Ambient radial light glow
-      final glowPaint = Paint()
+      // Outer Warm/Red Glowing Atmospheric Aura Shader
+      final warmAuraPaint = Paint()
         ..shader = RadialGradient(
           colors: [
-            color.withOpacity(0.8),
+            const Color(0xFFFF5A5F).withOpacity(0.35),
             color.withOpacity(0.2),
             Colors.transparent,
           ],
-        ).createShader(Rect.fromCircle(center: pos, radius: 18));
-      canvas.drawCircle(pos, 18, glowPaint);
+          stops: const [0.0, 0.5, 1.0],
+        ).createShader(Rect.fromCircle(center: pos, radius: 26))
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
 
-      // Star core
+      canvas.drawCircle(pos, 26, warmAuraPaint);
+
+      // Inner Primary Color Radial Light Halo Shader
+      final innerHaloPaint = Paint()
+        ..shader = RadialGradient(
+          colors: [
+            color.withOpacity(0.9),
+            color.withOpacity(0.3),
+            Colors.transparent,
+          ],
+        ).createShader(Rect.fromCircle(center: pos, radius: 14));
+
+      canvas.drawCircle(pos, 14, innerHaloPaint);
+
+      // Shining Star Core
       final corePaint = Paint()..color = Colors.white;
-      canvas.drawCircle(pos, 5, corePaint);
+      canvas.drawCircle(pos, 5.5, corePaint);
     }
   }
 
