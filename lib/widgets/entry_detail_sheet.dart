@@ -4,16 +4,21 @@ import '../models/mood_entry.dart';
 
 class EntryDetailSheet extends StatelessWidget {
   final MoodEntry entry;
+  final VoidCallback? onDelete;
 
-  const EntryDetailSheet({super.key, required this.entry});
+  const EntryDetailSheet({
+    super.key,
+    required this.entry,
+    this.onDelete,
+  });
 
-  static void show(BuildContext context, MoodEntry entry) {
+  static void show(BuildContext context, MoodEntry entry, {VoidCallback? onDelete}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withOpacity(0.9),
-      builder: (context) => EntryDetailSheet(entry: entry),
+      builder: (context) => EntryDetailSheet(entry: entry, onDelete: onDelete),
     );
   }
 
@@ -70,12 +75,12 @@ class EntryDetailSheet extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  if (entry.moodPercentages.isNotEmpty) ...[
+                  if (entry.moodPercentages != null && entry.moodPercentages!.isNotEmpty) ...[
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       alignment: WrapAlignment.center,
-                      children: entry.moodPercentages.entries.map((e) {
+                      children: entry.moodPercentages!.entries.map((e) {
                         return Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
@@ -103,7 +108,7 @@ class EntryDetailSheet extends StatelessWidget {
                       ),
                       child: Text(
                         entry.note!,
-                        style: const TextStyle(color: Colors.white90, fontSize: 15, height: 1.5),
+                        style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 15, height: 1.5),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -143,7 +148,17 @@ class EntryDetailSheet extends StatelessWidget {
                         },
                       ),
                     ),
+                    const SizedBox(height: 24),
                   ],
+                  if (onDelete != null)
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        onDelete!();
+                      },
+                      icon: const Icon(Icons.delete, color: Colors.redAccent),
+                      label: const Text('Delete Entry', style: TextStyle(color: Colors.redAccent)),
+                    ),
                 ],
               ),
             ),
