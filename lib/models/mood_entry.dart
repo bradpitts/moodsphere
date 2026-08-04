@@ -11,53 +11,31 @@ class MoodEntry extends HiveObject {
   final DateTime date;
 
   @HiveField(2)
-  final int primaryColorValue;
+  final Map<String, double>? moodPercentages;
 
   @HiveField(3)
-  final Map<String, double> moodPercentages;
-
-  @HiveField(4)
-  final List<String> stateTags;
-
-  @HiveField(5)
   final String? note;
 
-  @HiveField(6)
+  @HiveField(4)
   final List<String>? photoPaths;
 
-  @HiveField(7)
-  final String? strokeDataJson;
+  @HiveField(5)
+  final int? primaryColorValue;
+
+  @HiveField(6)
+  final List<String>? stateTags;
 
   MoodEntry({
     required this.id,
     required this.date,
-    required this.primaryColorValue,
-    required this.moodPercentages,
-    required this.stateTags,
+    this.moodPercentages,
     this.note,
     this.photoPaths,
-    this.strokeDataJson,
+    this.primaryColorValue,
+    this.stateTags,
   });
 
-  MoodEntry copyWith({
-    String? id,
-    DateTime? date,
-    int? primaryColorValue,
-    Map<String, double>? moodPercentages,
-    List<String>? stateTags,
-    String? note,
-    List<String>? photoPaths,
-    String? strokeDataJson,
-  }) {
-    return MoodEntry(
-      id: id ?? this.id,
-      date: date ?? this.date,
-      primaryColorValue: primaryColorValue ?? this.primaryColorValue,
-      moodPercentages: moodPercentages ?? this.moodPercentages,
-      stateTags: stateTags ?? this.stateTags,
-      note: note ?? this.note,
-      photoPaths: photoPaths ?? this.photoPaths,
-      strokeDataJson: strokeDataJson ?? this.strokeDataJson,
-    );
-  }
+  // Backwards compatibility getters for services & list views
+  int get colorValue => primaryColorValue ?? (moodPercentages?.values.isNotEmpty == true ? 0xFFFFD700 : 0xFFFFD700);
+  String? get photoPath => (photoPaths != null && photoPaths!.isNotEmpty) ? photoPaths!.first : null;
 }
