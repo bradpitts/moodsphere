@@ -9,6 +9,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    # Set working directory to your subfolder (e.g. ./moodsphere)
+    # Change 'moodsphere' below if your folder on GitHub has a different name
+    defaults:
+      run:
+        working-directory: ./moodsphere
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -37,4 +43,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MoodSphere-v1-Release-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: moodsphere/build/app/outputs/flutter-apk/app-release.apk
