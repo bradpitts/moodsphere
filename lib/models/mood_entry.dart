@@ -11,7 +11,7 @@ class MoodEntry extends HiveObject {
   final DateTime date;
 
   @HiveField(2)
-  final Map<String, double>? moodPercentages;
+  final Map<String, double>? _moodPercentages;
 
   @HiveField(3)
   final String? note;
@@ -20,22 +20,31 @@ class MoodEntry extends HiveObject {
   final List<String>? photoPaths;
 
   @HiveField(5)
-  final int? primaryColorValue;
+  final int? _primaryColorValue;
 
   @HiveField(6)
-  final List<String>? stateTags;
+  final List<String>? _stateTags;
 
   MoodEntry({
     required this.id,
     required this.date,
-    this.moodPercentages,
+    Map<String, double>? moodPercentages,
     this.note,
     this.photoPaths,
-    this.primaryColorValue,
-    this.stateTags,
-  });
+    int? primaryColorValue,
+    int? colorValue,
+    List<String>? stateTags,
+  })  : _moodPercentages = moodPercentages,
+        _primaryColorValue = primaryColorValue ?? colorValue,
+        _stateTags = stateTags;
 
-  // Backwards compatibility getters for services & list views
-  int get colorValue => primaryColorValue ?? (moodPercentages?.values.isNotEmpty == true ? 0xFFFFD700 : 0xFFFFD700);
+  // Non-nullable getters with fallbacks to ensure 100% UI null-safety
+  int get primaryColorValue => _primaryColorValue ?? 0xFFFFD700;
+  int get colorValue => primaryColorValue;
+
+  Map<String, double> get moodPercentages => _moodPercentages ?? {};
+  List<String> get stateTags => _stateTags ?? [];
+
+  List<String> get safePhotoPaths => photoPaths ?? (photoPath != null ? [photoPath!] : []);
   String? get photoPath => (photoPaths != null && photoPaths!.isNotEmpty) ? photoPaths!.first : null;
 }
