@@ -1,90 +1,112 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-
 import '../models/mood_entry.dart';
+import 'orb_painter.dart'; // Assuming OrbPainter is used for bead textures
 
 class Native3DSphere extends StatefulWidget {
   final List<MoodEntry> entries;
-  final Function(MoodEntry entry) onBeadTap;
+  final ValueChanged<MoodEntry> onEntryTap;
 
   const Native3DSphere({
-    Key? key,
+    super.key,
     required this.entries,
-    required this.onBeadTap,
-  }) : super(key: key);
+    required this.onEntryTap,
+  });
 
   @override
   State<Native3DSphere> createState() => _Native3DSphereState();
 }
 
-class _Native3DSphereState extends State<Native3DSphere>
-    with SingleTickerProviderStateMixin {
-  double _yaw = 0.0;
-  double _pitch = 0.0;
-  Offset _lastTouchPos = Offset.zero;
+class _Native3DSphereState extends State<Native3DSphere> with SingleTickerProviderStateMixin {
+  late AnimationController _autoRotationController;
+  double _rotationX = 0.0;
+  double _rotationY = 0.0;
+  Offset? _lastPanOffset;
 
-  late AnimationController _autoRotateController;
+  // Sphere parameters
+  final int _totalBeads = 100;
+  final double _sphereRadius = 120.0;
+  final double _beadRadius = 8.0;
 
   @override
   void initState() {
     super.initState();
-    _autoRotateController = AnimationController(
+    _autoRotationController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 25),
-    )..addListener(() {
-        setState(() {
-          _yaw += 0.005;
-        });
-      })
-    ..repeat();
+      duration: const Duration(seconds: 60),
+    )..repeat();
   }
 
   @override
   void dispose() {
-    _autoRotateController.dispose();
+    _autoRotationController.dispose();
     super.dispose();
   }
 
+  // 3D Point projection helper
+  Offset _project(double x, double y, double z, double width, double height) {
+    // Basic perspective projection
+    double perspective = 500 / (500 + z);
+    return Offset(
+      (x * perspective) + width / 2,
+      (y * perspective) + height / 2,
+    );
+  }
+
   void _handleTap(TapUpDetails details, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2.2;
-    final totalBeads = 100;
-    final goldenRatio = (1 + math.sqrt(5)) / 2;
+    // 1. Map entries to specific bead indices (Fibonacci spiral)
+    // For simplicity, we match by date index.
+    final now = DateTime.now();
+    
+    // 2. Animate and rotate points based on current rotation
+    double angleY = _rotationY + (_autoRotationController.value * 2 * math.pi);
+    double angleX = _rotationX;
 
-    MoodEntry? hitEntry;
-    double closestDistance = 30.0;
+    for (int i = 0; i < _totalBeads; i++) {
+      // a. Calculate base Fibonacci point
+      double y = 1 - (i / (_totalBeads - 1)) * 2;
+      double radiusAtY = math.sqrt(1 - y * y);
+      double theta = (math.pi * (1 + math.sqrt(5))) * i;
+      double x = math.cos(theta) * radiusAtY;
+      double z = math.sin(theta) * radiusAtY;
 
-    for (int i = 0; i < totalBeads; i++) {
-      final y = 1 - (i / (totalBeads - 1)) * 2;
-      final radiusAtY = math.sqrt(math.max(0, 1 - y * y));
-      final theta = 2 * math.pi * i / goldenRatio;
+      // Scale to sphere radius
+      x *= _sphereRadius;
+      y *= _sphereRadius;
+      z *= _sphereRadius;
 
-      final x0 = math.cos(theta) * radiusAtY;
-      final z0 = math.sin(theta) * radiusAtY;
+      // b. Apply 3D Rotations (Y-axis, then X-axis)
+      // Y-axis rotation
+      double nextX = x * math.cos(angleY) + z * math.sin(angleY);
+      double nextZ = -x * math.sin(angleY) + z * math.cos(angleY);
+      x = nextX;
+      z = nextZ;
 
-      // Rotate around Pitch (X) and Yaw (Y)
-      final x1 = x0;
-      final y1 = y * math.cos(_pitch) - z0 * math.sin(_pitch);
-      final z1 = y * math.sin(_pitch) + z0 * math.cos(_pitch);
+      // X-axis rotation
+      double nextY = y * math.cos(angleX) - z * math.sin(angleX);
+      nextZ = y * math.sin(angleX) + z * math.cos(angleX);
+      y = nextY;
+      z = nextZ;
 
-      final x2 = x1 * math.cos(_yaw) + z1 * math.sin(_yaw);
-      final y2 = y1;
-      final z2 = -x1 * math.sin(_yaw) + z1 * math.cos(_yaw);
+      // c. Project to 2D screen coordinates
+      Offset projected = _project(x, y, z, size.width, size.height);
 
-      // Project to 2D Screen
-      final screenX = center.dx + x2 * radius;
-      final screenY = center.dy + y2 * radius;
-      final dist = (Offset(screenX, screenY) - details.localPosition).distance;
+      // d. Check if tap is within bead radius (hit detection)
+      if ((details.localPosition - projected).distance <= _beadRadius * 1.5) {
+        // e. Check if this bead has an entry (simple mapping based on date index for demo)
+        // In production, MoodEntry should store its intended bead index.
+        final targetDate = now.subtract(Duration(days: i));
+        final MoodEntry? match = widget.entries.where((e) {
+          return e.date.year == targetDate.year &&
+                 e.date.month == targetDate.month &&
+                 e.date.day == targetDate.day;
+        }).firstOrNull;
 
-      // Only hit beads facing forward (z2 > -0.2)
-      if (z2 > -0.2 && dist < closestDistance && i < widget.entries.length) {
-        closestDistance = dist;
-        hitEntry = widget.entries[i];
+        if (match != null) {
+          widget.onEntryTap(match);
+          return; // Stop checking after finding the first hit
+        }
       }
-    }
-
-    if (hitEntry != null) {
-      widget.onBeadTap(hitEntry);
     }
   }
 
@@ -96,30 +118,41 @@ class _Native3DSphereState extends State<Native3DSphere>
 
         return GestureDetector(
           onPanStart: (details) {
-            _lastTouchPos = details.localPosition;
-            _autoRotateController.stop();
+            _autoRotationController.stop();
+            _lastPanOffset = details.localPosition;
           },
           onPanUpdate: (details) {
-            final delta = details.localPosition - _lastTouchPos;
-            setState(() {
-              _yaw += delta.dx * 0.008;
-              _pitch += delta.dy * 0.008;
-            });
-            _lastTouchPos = details.localPosition;
+            if (_lastPanOffset != null) {
+              setState(() {
+                // Adjust sensitivity
+                _rotationY += (details.localPosition.dx - _lastPanOffset!.dx) * 0.01;
+                _rotationX += (details.localPosition.dy - _lastPanOffset!.dy) * 0.01;
+                _lastPanOffset = details.localPosition;
+              });
+            }
           },
           onPanEnd: (_) {
-            _autoRotateController.repeat();
+            _lastPanOffset = null;
+            _autoRotationController.repeat();
           },
           onTapUp: (details) => _handleTap(details, size),
           child: Container(
-            color: const Color(0xFF121212),
-            child: CustomPaint(
-              size: size,
-              painter: _SpherePainter(
-                entries: widget.entries,
-                yaw: _yaw,
-                pitch: _pitch,
-              ),
+            color: Colors.transparent, // Ensure full area is tappable
+            child: AnimatedBuilder(
+              animation: _autoRotationController,
+              builder: (context, child) {
+                return CustomPaint(
+                  size: Size.infinite,
+                  painter: _SpherePainter(
+                    entries: widget.entries,
+                    rotationX: _rotationX,
+                    rotationY: _rotationY + (_autoRotationController.value * 2 * math.pi),
+                    sphereRadius: _sphereRadius,
+                    beadRadius: _beadRadius,
+                    totalBeads: _totalBeads,
+                  ),
+                );
+              },
             ),
           ),
         );
@@ -130,99 +163,154 @@ class _Native3DSphereState extends State<Native3DSphere>
 
 class _SpherePainter extends CustomPainter {
   final List<MoodEntry> entries;
-  final double yaw;
-  final double pitch;
+  final double rotationX;
+  final double rotationY;
+  final double sphereRadius;
+  final double beadRadius;
+  final int totalBeads;
 
   _SpherePainter({
     required this.entries,
-    required this.yaw,
-    required this.pitch,
+    required this.rotationX,
+    required this.rotationY,
+    required this.sphereRadius,
+    required this.beadRadius,
+    required this.totalBeads,
   });
+
+  // 3D Point projection helper
+  Offset _project(double x, double y, double z, double width, double height) {
+    double perspective = 500 / (500 + z);
+    return Offset(
+      (x * perspective) + width / 2,
+      (y * perspective) + height / 2,
+    );
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2.3;
-    final totalBeads = 100;
-    final goldenRatio = (1 + math.sqrt(5)) / 2;
+    final now = DateTime.now();
 
-    // Draw central glowing wireframe core
-    final wirePaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0
-      ..color = Colors.white.withOpacity(0.08);
-    canvas.drawCircle(center, radius, wirePaint);
-
-    final points = <_Bead3D>[];
+    // 1. Calculate and store all projected points with depth
+    List<_BeadProjected> projectedBeads = [];
 
     for (int i = 0; i < totalBeads; i++) {
-      final y = 1 - (i / (totalBeads - 1)) * 2;
-      final radiusAtY = math.sqrt(math.max(0, 1 - y * y));
-      final theta = 2 * math.pi * i / goldenRatio;
+      // Fibonacci spiral point distribution
+      double y = 1 - (i / (totalBeads - 1)) * 2;
+      double radiusAtY = math.sqrt(1 - y * y);
+      double theta = (math.pi * (1 + math.sqrt(5))) * i;
+      double x = math.cos(theta) * radiusAtY;
+      double z = math.sin(theta) * radiusAtY;
 
-      final x0 = math.cos(theta) * radiusAtY;
-      final z0 = math.sin(theta) * radiusAtY;
+      // Scale to sphere radius
+      x *= sphereRadius;
+      y *= sphereRadius;
+      z *= sphereRadius;
 
-      // 3D Matrix Rotations
-      final x1 = x0;
-      final y1 = y * math.cos(pitch) - z0 * math.sin(pitch);
-      final z1 = y * math.sin(pitch) + z0 * math.cos(pitch);
+      // 3D Rotations
+      // Y-axis
+      double nextX = x * math.cos(rotationY) + z * math.sin(rotationY);
+      double nextZ = -x * math.sin(rotationY) + z * math.cos(rotationY);
+      x = nextX;
+      z = nextZ;
 
-      final x2 = x1 * math.cos(yaw) + z1 * math.sin(yaw);
-      final y2 = y1;
-      final z2 = -x1 * math.sin(yaw) + z1 * math.cos(yaw);
+      // X-axis
+      double nextY = y * math.cos(rotationX) - z * math.sin(rotationX);
+      nextZ = y * math.sin(rotationX) + z * math.cos(rotationX);
+      y = nextY;
+      z = nextZ;
 
-      final hasEntry = i < entries.length;
-      final entry = hasEntry ? entries[i] : null;
+      // Match entry (simple date fallback for demo)
+      final targetDate = now.subtract(Duration(days: i));
+      final MoodEntry? match = entries.where((e) {
+        return e.date.year == targetDate.year &&
+               e.date.month == targetDate.month &&
+               e.date.day == targetDate.day;
+      }).firstOrNull;
 
-      points.add(_Bead3D(
-        x: x2,
-        y: y2,
-        z: z2,
-        entry: entry,
+      // Project
+      Offset projectedPoint = _project(x, y, z, size.width, size.height);
+      
+      projectedBeads.add(_BeadProjected(
+        point: projectedPoint,
+        depth: z, // Used for sorting and scaling
+        entry: match,
       ));
     }
 
-    // Sort by Z depth for 3D painter ordering
-    points.sort((a, b) => a.z.compareTo(b.z));
+    // 2. Sort beads by depth ( Painter's Algorithm: back to front)
+    projectedBeads.sort((a, b) => b.depth.compareTo(a.depth));
 
-    for (var bead in points) {
-      final screenX = center.dx + bead.x * radius;
-      final screenY = center.dy + bead.y * radius;
-      final depthFactor = ((bead.z + 1) / 2.0).clamp(0.1, 1.0);
+    // 3. Paint beads
+    final glassPaint = Paint()
+      ..color = Colors.white.withOpacity(0.15)
+      ..style = PaintingStyle.fill;
 
-      final beadRadius = (10.0 + (depthFactor * 6.0));
-      final opacity = (0.2 + (depthFactor * 0.8)).clamp(0.1, 1.0);
+    final glassBorderPaint = Paint()
+      ..color = Colors.white.withOpacity(0.3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.5;
 
-      final color = bead.entry != null
-          ? Color(bead.entry!.primaryColorValue)
-          : Colors.white.withOpacity(0.15);
+    for (var bead in projectedBeads) {
+      // Perspective scaling for radius
+      double perspectiveFactor = 500 / (500 + bead.depth);
+      double scaledRadius = beadRadius * perspectiveFactor;
 
-      final beadPaint = Paint()
-        ..color = color.withOpacity(opacity)
-        ..style = PaintingStyle.fill;
+      // Transparency fades based on depth (distant = dimmer)
+      double depthOpacity = ((sphereRadius - bead.depth) / (2 * sphereRadius)).clamp(0.2, 1.0);
 
-      canvas.drawCircle(Offset(screenX, screenY), beadRadius, beadPaint);
+      if (bead.entry != null) {
+        // Render Painted Orb (Texture)
+        // For simplicity in this example, we paint a solid glow.
+        // Production should use the pre-rendered texture image.
+        final primaryColor = Color(bead.entry!.primaryColorValue);
+        
+        // Ambient glow
+        canvas.drawCircle(
+          bead.point,
+          scaledRadius * 1.8,
+          Paint()
+            ..color = primaryColor.withOpacity(0.3 * depthOpacity)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+        );
 
-      // Glass specular highlight
-      final highlightPaint = Paint()
-        ..color = Colors.white.withOpacity(opacity * 0.4)
-        ..style = PaintingStyle.fill;
-      canvas.drawCircle(
-        Offset(screenX - beadRadius * 0.3, screenY - beadRadius * 0.3),
-        beadRadius * 0.35,
-        highlightPaint,
-      );
+        // Core color
+        canvas.drawCircle(
+          bead.point,
+          scaledRadius,
+          Paint()..color = primaryColor.withOpacity(depthOpacity),
+        );
+
+        // Glass specular shine overlay
+        canvas.drawCircle(
+          bead.point,
+          scaledRadius,
+          glassBorderPaint..color = Colors.white.withOpacity(0.4 * depthOpacity),
+        );
+      } else {
+        // Render empty glass bead
+        canvas.drawCircle(bead.point, scaledRadius, glassPaint..color = Colors.white.withOpacity(0.1 * depthOpacity));
+        canvas.drawCircle(bead.point, scaledRadius, glassBorderPaint..color = Colors.white.withOpacity(0.2 * depthOpacity));
+      }
     }
   }
 
   @override
-  bool shouldRepaint(covariant _SpherePainter oldDelegate) => true;
+  bool shouldRepaint(covariant _SpherePainter oldDelegate) {
+    return oldDelegate.rotationX != rotationX ||
+           oldDelegate.rotationY != rotationY ||
+           oldDelegate.entries != entries;
+  }
 }
 
-class _Bead3D {
-  final double x, y, z;
+class _BeadProjected {
+  final Offset point;
+  final double depth;
   final MoodEntry? entry;
 
-  _Bead3D({required this.x, required this.y, required this.z, this.entry});
+  _BeadProjected({
+    required this.point,
+    required this.depth,
+    this.entry,
+  });
 }
