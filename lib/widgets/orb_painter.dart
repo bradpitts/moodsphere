@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 enum BrushTool { paintbrush, spray, marker }
@@ -35,7 +34,7 @@ class OrbPainter extends CustomPainter {
     final radius = math.min(size.width, size.height) / 2.2;
     final sphereRect = Rect.fromCircle(center: center, radius: radius);
 
-    // 1. Outer Ambient Glow (Using primary color accent if strokes exist)
+    // 1. Outer Ambient Glow
     final outerGlowColor = strokePoints.isNotEmpty ? primaryColor : const Color(0xFF4A90E2);
     final outerGlowPaint = Paint()
       ..shader = RadialGradient(
@@ -50,43 +49,28 @@ class OrbPainter extends CustomPainter {
 
     canvas.drawCircle(center, radius * 1.45, outerGlowPaint);
 
-    // 2. Initial Blank/Translucent Glass Base Fill
-    final baseGlassPaint = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(-0.3, -0.4),
-        radius: 0.95,
-        colors: [
-          const Color(0x33242436),
-          const Color(0x221A1A2A),
-          const Color(0x110D0D18),
-        ],
-        stops: const [0.0, 0.55, 1.0],
-      ).createShader(sphereRect);
-
-    canvas.drawCircle(center, radius, baseGlassPaint);
-
-    // 3. True Offscreen Color Blending using saveLayer & BlendMode.screen
+    // 2. Blank Canvas Start Inside Glass Circle (Subtle Glass Outline Ring Only)
     canvas.save();
     final clipPath = Path()..addOval(sphereRect);
     canvas.clipPath(clipPath);
 
-    canvas.saveLayer(sphereRect, Paint()..blendMode = BlendMode.screen);
+    // 3. Soft Watercolor Bleeding via Offscreen saveLayer (BlendMode.srcOver)
+    canvas.saveLayer(Rect.largest, Paint()..blendMode = BlendMode.srcOver);
 
     final stampPaint = Paint()
-      ..blendMode = BlendMode.screen
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24.0);
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 36.0);
 
     if (strokePoints.isNotEmpty) {
       for (var point in strokePoints) {
-        final stampRadius = point.size * 1.6;
+        final stampRadius = point.size * 1.8;
 
         stampPaint.shader = RadialGradient(
           colors: [
-            point.color.withOpacity(0.9),
-            point.color.withOpacity(0.4),
+            point.color.withOpacity(0.85),
+            point.color.withOpacity(0.35),
             Colors.transparent,
           ],
-          stops: const [0.0, 0.5, 1.0],
+          stops: const [0.0, 0.55, 1.0],
         ).createShader(Rect.fromCircle(center: point.offset, radius: stampRadius));
 
         canvas.drawCircle(point.offset, stampRadius, stampPaint);
@@ -101,18 +85,17 @@ class OrbPainter extends CustomPainter {
         stops: const [0.0, 0.6, 1.0],
       ).createShader(sphereRect);
 
-      canvas.drawCircle(center, radius, stampPaint);
+      canvas.drawCircle(center, radius * 0.9, stampPaint);
     }
 
-    canvas.restore();
-    canvas.restore();
+    canvas.restore(); // Restore saveLayer
 
     // 4. Embedded Specular Glass Core Shine
     final highlightCenter = Offset(center.dx - radius * 0.32, center.dy - radius * 0.35);
     final glassShinePaint = Paint()
       ..shader = RadialGradient(
         colors: [
-          Colors.white.withOpacity(0.6),
+          Colors.white.withOpacity(0.55),
           Colors.white.withOpacity(0.12),
           Colors.transparent,
         ],
@@ -121,7 +104,7 @@ class OrbPainter extends CustomPainter {
 
     canvas.drawCircle(highlightCenter, radius * 0.4, glassShinePaint);
 
-    // 5. Subtle Glass Rim Line (1px)
+    // 5. Glass Rim Line (1px)
     final rimPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0
@@ -136,6 +119,8 @@ class OrbPainter extends CustomPainter {
       ).createShader(sphereRect);
 
     canvas.drawCircle(center, radius, rimPaint);
+
+    canvas.restore(); // Restore clipPath
   }
 
   @override

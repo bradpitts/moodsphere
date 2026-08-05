@@ -39,7 +39,6 @@ class MoodEntry extends HiveObject {
         _primaryColorValue = primaryColorValue ?? colorValue,
         _stateTags = stateTags;
 
-  // Non-nullable getters with fallbacks for 100% null-safety and legacy support
   int get primaryColorValue => _primaryColorValue ?? 0xFFFFD700;
   int get colorValue => primaryColorValue;
 
