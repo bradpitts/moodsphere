@@ -11,7 +11,7 @@ class MoodEntry extends HiveObject {
   final DateTime date;
 
   @HiveField(2)
-  final Map<String, double>? _moodPercentages;
+  final Map<dynamic, dynamic>? _moodPercentages;
 
   @HiveField(3)
   final String? note;
@@ -28,7 +28,7 @@ class MoodEntry extends HiveObject {
   MoodEntry({
     required this.id,
     required this.date,
-    Map<String, double>? moodPercentages,
+    Map<dynamic, dynamic>? moodPercentages,
     this.note,
     List<String>? photoPaths,
     int? primaryColorValue,
@@ -39,12 +39,26 @@ class MoodEntry extends HiveObject {
         _primaryColorValue = primaryColorValue ?? colorValue,
         _stateTags = stateTags;
 
-  int get primaryColorValue => _primaryColorValue ?? 0xFFFFD700;
+  // Guarantees a non-zero, non-transparent fallback color
+  int get primaryColorValue => (_primaryColorValue != null && _primaryColorValue! != 0) 
+      ? _primaryColorValue! 
+      : 0xFFFFD700;
+
   int get colorValue => primaryColorValue;
 
-  Map<String, double> get moodPercentages => _moodPercentages ?? {};
-  List<String> get stateTags => _stateTags ?? [];
+  // Robust dynamic-to-typed Map casting for Hive storage
+  Map<String, double> get moodPercentages {
+    if (_moodPercentages == null) return {};
+    final Map<String, double> result = {};
+    _moodPercentages!.forEach((key, value) {
+      if (key != null && value != null) {
+        result[key.toString()] = (value as num).toDouble();
+      }
+    });
+    return result;
+  }
 
+  List<String> get stateTags => _stateTags ?? [];
   List<String> get safePhotoPaths => _photoPaths ?? [];
   List<String>? get photoPaths => _photoPaths;
   String? get photoPath => safePhotoPaths.isNotEmpty ? safePhotoPaths.first : null;

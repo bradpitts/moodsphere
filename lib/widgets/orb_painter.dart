@@ -52,7 +52,7 @@ class OrbPainter extends CustomPainter {
     final circleRect = Rect.fromCircle(center: center, radius: radius);
     final circlePath = Path()..addOval(circleRect);
 
-    // 1. Glass Outer Rim
+    // 1. Outer Glass Rim
     final rimPaint = Paint()
       ..color = Colors.white.withOpacity(0.3)
       ..style = PaintingStyle.stroke
@@ -60,11 +60,11 @@ class OrbPainter extends CustomPainter {
 
     canvas.drawCircle(center, radius, rimPaint);
 
-    // 2. Clip all rendering strictly inside glass sphere
+    // 2. Clip all rendering inside glass sphere
     canvas.save();
     canvas.clipPath(circlePath);
 
-    // Dark Translucent Glass Base
+    // Dark Translucent Glass Sphere Base
     canvas.drawCircle(
       center,
       radius,
@@ -77,7 +77,7 @@ class OrbPainter extends CustomPainter {
     canvas.saveLayer(circleRect, Paint()..blendMode = BlendMode.srcOver);
 
     if (allStrokes.isNotEmpty) {
-      // TIER 1: Live Freehand Touch Painting
+      // TIER 1: Live Freehand Touch Strokes
       for (var stroke in allStrokes) {
         if (stroke.points.isEmpty) continue;
 
@@ -113,52 +113,59 @@ class OrbPainter extends CustomPainter {
           canvas.drawPath(path, strokePaint);
         }
       }
-    } else if (moodPercentages != null && moodPercentages!.isNotEmpty) {
-      // TIER 2: Saved Entry Multi-Color Radial Blended Gradient
-      List<Color> colors = [];
-      moodPercentages!.forEach((key, val) {
-        if (val > 0) {
-          colors.add(_getMoodColor(key));
-        }
-      });
+    } else {
+      // TIER 2 & 3: Overlapping 3D Radial Clouds (Saved Entries / App Restart)
+      final activeMoods = <MapEntry<Color, double>>[];
 
-      if (colors.isEmpty) {
-        final fallback = primaryColorValue != null ? Color(primaryColorValue!) : const Color(0xFFFFD700);
-        colors = [fallback, fallback];
-      } else if (colors.length == 1) {
-        colors.add(colors.first);
+      if (moodPercentages != null && moodPercentages!.isNotEmpty) {
+        moodPercentages!.forEach((key, val) {
+          if (val > 0) {
+            activeMoods.add(MapEntry(_getMoodColor(key), val));
+          }
+        });
       }
 
-      final sweepGradient = SweepGradient(
-        colors: colors,
-        center: Alignment.center,
-      );
+      if (activeMoods.isEmpty) {
+        final fallbackVal = (primaryColorValue != null && primaryColorValue != 0)
+            ? primaryColorValue!
+            : 0xFFFFD700;
+        activeMoods.add(MapEntry(Color(fallbackVal), 100.0));
+      }
 
-      canvas.drawCircle(
-        center,
-        radius,
-        Paint()
-          ..shader = sweepGradient.createShader(circleRect)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18.0),
-      );
-    } else {
-      // TIER 3: Safety Fallback using Primary Color
-      final fallbackColor = primaryColorValue != null 
-          ? Color(primaryColorValue!) 
-          : const Color(0xFFFFD700);
+      // Render soft overlapping radial clouds (eliminates pie chart sharp lines)
+      final offsets = [
+        Offset(center.dx - radius * 0.3, center.dy - radius * 0.3),
+        Offset(center.dx + radius * 0.3, center.dy + radius * 0.3),
+        Offset(center.dx + radius * 0.2, center.dy - radius * 0.3),
+        Offset(center.dx - radius * 0.3, center.dy + radius * 0.3),
+      ];
 
-      canvas.drawCircle(
-        center,
-        radius,
-        Paint()
-          ..color = fallbackColor.withOpacity(0.85)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20.0),
-      );
+      for (int i = 0; i < activeMoods.length; i++) {
+        final color = activeMoods[i].key;
+        final pos = offsets[i % offsets.length];
+
+        final radialGradient = RadialGradient(
+          colors: [
+            color.withOpacity(0.95),
+            color.withOpacity(0.5),
+            color.withOpacity(0.0),
+          ],
+          stops: const [0.0, 0.5, 1.0],
+        );
+
+        canvas.drawCircle(
+          pos,
+          radius * 1.1,
+          Paint()
+            ..shader = radialGradient.createShader(Rect.fromCircle(center: pos, radius: radius * 1.1))
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15.0),
+        );
+      }
     }
 
     canvas.restore(); // Restore stroke layer
 
-    // 3. Glass Specular 3D Reflection Highlight
+    // 3. Glass Specular Highlight (3D Shine)
     final highlightPath = Path()
       ..addOval(Rect.fromLTWH(
         center.dx - radius * 0.45,
