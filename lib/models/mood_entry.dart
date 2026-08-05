@@ -11,53 +11,42 @@ class MoodEntry extends HiveObject {
   final DateTime date;
 
   @HiveField(2)
-  final int primaryColorValue;
+  final Map<String, double>? _moodPercentages;
 
   @HiveField(3)
-  final Map<String, double> moodPercentages;
-
-  @HiveField(4)
-  final List<String> stateTags;
-
-  @HiveField(5)
   final String? note;
 
-  @HiveField(6)
-  final List<String>? photoPaths;
+  @HiveField(4)
+  final List<String>? _photoPaths;
 
-  @HiveField(7)
-  final String? strokeDataJson;
+  @HiveField(5)
+  final int? _primaryColorValue;
+
+  @HiveField(6)
+  final List<String>? _stateTags;
 
   MoodEntry({
     required this.id,
     required this.date,
-    required this.primaryColorValue,
-    required this.moodPercentages,
-    required this.stateTags,
-    this.note,
-    this.photoPaths,
-    this.strokeDataJson,
-  });
-
-  MoodEntry copyWith({
-    String? id,
-    DateTime? date,
-    int? primaryColorValue,
     Map<String, double>? moodPercentages,
-    List<String>? stateTags,
-    String? note,
+    this.note,
     List<String>? photoPaths,
-    String? strokeDataJson,
-  }) {
-    return MoodEntry(
-      id: id ?? this.id,
-      date: date ?? this.date,
-      primaryColorValue: primaryColorValue ?? this.primaryColorValue,
-      moodPercentages: moodPercentages ?? this.moodPercentages,
-      stateTags: stateTags ?? this.stateTags,
-      note: note ?? this.note,
-      photoPaths: photoPaths ?? this.photoPaths,
-      strokeDataJson: strokeDataJson ?? this.strokeDataJson,
-    );
-  }
+    int? primaryColorValue,
+    int? colorValue,
+    List<String>? stateTags,
+  })  : _moodPercentages = moodPercentages,
+        _photoPaths = photoPaths,
+        _primaryColorValue = primaryColorValue ?? colorValue,
+        _stateTags = stateTags;
+
+  // Non-nullable getters with fallbacks for 100% null-safety and legacy support
+  int get primaryColorValue => _primaryColorValue ?? 0xFFFFD700;
+  int get colorValue => primaryColorValue;
+
+  Map<String, double> get moodPercentages => _moodPercentages ?? {};
+  List<String> get stateTags => _stateTags ?? [];
+
+  List<String> get safePhotoPaths => _photoPaths ?? [];
+  List<String>? get photoPaths => _photoPaths;
+  String? get photoPath => safePhotoPaths.isNotEmpty ? safePhotoPaths.first : null;
 }
