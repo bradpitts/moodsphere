@@ -1,345 +1,279 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+import 'package:table_calendar/table_calendar.dart';
+
 import '../models/mood_entry.dart';
 import '../providers/mood_provider.dart';
 import '../widgets/entry_detail_sheet.dart';
- 
+
 class CalendarScreen extends ConsumerStatefulWidget {
-  const CalendarScreen({super.key});
+  const CalendarScreen({Key? key}) : super(key: key);
 
   @override
   ConsumerState<CalendarScreen> createState() => _CalendarScreenState();
 }
 
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
-  DateTime _selectedMonth = DateTime.now();
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay;
+
+  MoodEntry? _getEntryForDay(List<MoodEntry> entries, DateTime day) {
+    for (var e in entries) {
+      if (isSameDay(e.date, day)) return e;
+    }
+    return null;
+  }
+
+  void _showDetailSheet(MoodEntry entry) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => EntryDetailSheet(
+        entry: entry,
+        onDelete: () {
+          ref.read(moodNotifierProvider.notifier).deleteEntry(entry.id);
+        },
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final entries = ref.watch(moodEntriesProvider);
+    final entries = ref.watch(moodNotifierProvider);
+    final daysInMonth =
+        DateUtils.getDaysInMonth(_focusedDay.year, _focusedDay.month);
 
-    // Filter entries for selected month & year
     final monthEntries = entries.where((e) {
-      return e.date.year == _selectedMonth.year &&
-             e.date.month == _selectedMonth.month;
+      return e.date.year == _focusedDay.year &&
+          e.date.month == _focusedDay.month;
     }).toList();
 
-    // Calculate aggregated mood statistics safely
-    final Map<String, double> aggregatedMoods = {};
-    double totalWeight = 0;
-
+    // Calculate dominant mood & overall mood percentage breakdown for month
+    final moodCountMap = <String, double>{};
     for (var e in monthEntries) {
-      final percentages = e.moodPercentages ?? {};
-      percentages.forEach((name, val) {
-        aggregatedMoods[name] = (aggregatedMoods[name] ?? 0) + val;
-        totalWeight += val;
+      e.moodPercentages.forEach((name, val) {
+        moodCountMap[name] = (moodCountMap[name] ?? 0) + val;
       });
     }
 
-    // Calculate normalized percentages for the month report
-    final Map<String, int> finalMoodPercentages = {};
-    String dominantMood = "None";
-    double maxVal = -1;
-
-    if (totalWeight > 0) {
-      aggregatedMoods.forEach((name, totalVal) {
-        final percentage = ((totalVal / totalWeight) * 100).round();
-        if (percentage > 0) {
-          finalMoodPercentages[name] = percentage;
-        }
-        if (totalVal > maxVal) {
-          maxVal = totalVal;
-          dominantMood = name;
-        }
-      });
+    String dominantMood = 'None';
+    if (moodCountMap.isNotEmpty) {
+      dominantMood = moodCountMap.entries
+          .reduce((a, b) => a.value > b.value ? a : b)
+          .key;
     }
-
-    final daysInMonth = DateUtils.getDaysInMonth(_selectedMonth.year, _selectedMonth.month);
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white70),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          'Calendar & Month Report',
+          style: GoogleFonts.inter(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+          ),
+        ),
+        centerTitle: true,
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Screen Title
-              const Text(
-                'Calendar',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.1,
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Month Selector Controls
+              // Monthly Calendar Grid
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.chevron_left, color: Colors.white),
-                      onPressed: () {
-                        setState(() {
-                          _selectedMonth = DateTime(
-                            _selectedMonth.year,
-                            _selectedMonth.month - 1,
-                          );
-                        });
-                      },
-                    ),
-                    Text(
-                      '${_monthName(_selectedMonth.month)} ${_selectedMonth.year}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.chevron_right, color: Colors.white),
-                      onPressed: () {
-                        setState(() {
-                          _selectedMonth = DateTime(
-                            _selectedMonth.year,
-                            _selectedMonth.month + 1,
-                          );
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Days of Week Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-                    .map((day) => SizedBox(
-                          width: 38,
-                          child: Text(
-                            day,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Colors.white54,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ))
-                    .toList(),
-              ),
-              const SizedBox(height: 12),
-
-              // Calendar Grid
-              _buildMonthGrid(daysInMonth, monthEntries),
-              const SizedBox(height: 28),
-
-              // Month Report Card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E1E2C),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                ),
+                child: TableCalendar(
+                  firstDay: DateTime.utc(2020, 1, 1),
+                  lastDay: DateTime.utc(2030, 12, 31),
+                  focusedDay: _focusedDay,
+                  selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                  onDaySelected: (selectedDay, focusedDay) {
+                    setState(() {
+                      _selectedDay = selectedDay;
+                      _focusedDay = focusedDay;
+                    });
+                    final match = _getEntryForDay(entries, selectedDay);
+                    if (match != null) _showDetailSheet(match);
+                  },
+                  onPageChanged: (focusedDay) {
+                    setState(() => _focusedDay = focusedDay);
+                  },
+                  headerStyle: HeaderStyle(
+                    formatButtonVisible: false,
+                    titleCentered: true,
+                    titleTextStyle: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    leftChevronIcon: const Icon(Icons.chevron_left, color: Colors.white70),
+                    rightChevronIcon: const Icon(Icons.chevron_right, color: Colors.white70),
+                  ),
+                  calendarStyle: CalendarStyle(
+                    defaultTextStyle: GoogleFonts.inter(color: Colors.white),
+                    weekendTextStyle: GoogleFonts.inter(color: Colors.white70),
+                    outsideTextStyle: GoogleFonts.inter(color: Colors.white24),
+                  ),
+                  calendarBuilders: CalendarBuilders(
+                    prioritizedBuilder: (context, day, focusedDay) {
+                      final match = _getEntryForDay(entries, day);
+                      if (match != null) {
+                        final color = Color(match.primaryColorValue);
+                        return Center(
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: color,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: color.withOpacity(0.5),
+                                  blurRadius: 6,
+                                ),
+                              ],
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${day.day}',
+                                style: GoogleFonts.inter(
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Month Report Summary Card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E2C),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Your moods this month',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                    Text(
+                      'MONTH REPORT (${DateFormat('MMMM yyyy').format(_focusedDay)})',
+                      style: GoogleFonts.inter(
+                        color: Colors.white54,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.1,
                       ),
                     ),
                     const SizedBox(height: 14),
 
-                    // Mood percentage chips
-                    if (finalMoodPercentages.isNotEmpty)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Logged Days',
+                              style: GoogleFonts.inter(
+                                  color: Colors.white70, fontSize: 12),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${monthEntries.length} / $daysInMonth Days',
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              'Dominant Mood',
+                              style: GoogleFonts.inter(
+                                  color: Colors.white70, fontSize: 12),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              dominantMood,
+                              style: GoogleFonts.inter(
+                                color: const Color(0xFFFFD700),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+
+                    if (moodCountMap.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      const Divider(color: Colors.white10),
+                      const SizedBox(height: 10),
+
+                      Text(
+                        'Mood Distribution',
+                        style: GoogleFonts.inter(
+                            color: Colors.white70, fontSize: 12),
+                      ),
+                      const SizedBox(height: 8),
+
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: finalMoodPercentages.entries.map((e) {
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.08),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.white12),
+                        children: moodCountMap.entries.map((e) {
+                          return Chip(
+                            label: Text('${e.key} ${e.value.toInt()} pts'),
+                            backgroundColor: const Color(0xFF121212),
+                            labelStyle: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
                             ),
-                            child: Text(
-                              '${e.key} ${e.value}%',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
+                            side: BorderSide(
+                                color: Colors.white.withOpacity(0.1)),
                           );
                         }).toList(),
-                      )
-                    else
-                      const Text(
-                        'No logged entries for this month.',
-                        style: TextStyle(color: Colors.white38, fontSize: 13),
                       ),
-
-                    const SizedBox(height: 20),
-                    const Divider(color: Colors.white10),
-                    const SizedBox(height: 12),
-
-                    // Day count row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Day count',
-                          style: TextStyle(color: Colors.white70, fontSize: 14),
-                        ),
-                        Text(
-                          '${monthEntries.length} / $daysInMonth',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-
-                    // Dominant mood row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Dominant mood',
-                          style: TextStyle(color: Colors.white70, fontSize: 14),
-                        ),
-                        Text(
-                          dominantMood,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
+                    ],
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
             ],
           ),
         ),
       ),
     );
-  }
-
-  Widget _buildMonthGrid(int daysInMonth, List<MoodEntry> monthEntries) {
-    final firstDayOfMonth = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
-    final leadingEmptyDays = (firstDayOfMonth.weekday - 1) % 7;
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: leadingEmptyDays + daysInMonth,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 7,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 8,
-      ),
-      itemBuilder: (context, index) {
-        if (index < leadingEmptyDays) {
-          return const SizedBox.shrink();
-        }
-
-        final dayNumber = index - leadingEmptyDays + 1;
-        final dateForCell = DateTime(_selectedMonth.year, _selectedMonth.month, dayNumber);
-
-        // Find match for this day
-        final MoodEntry? match = monthEntries.where((e) {
-          return e.date.year == dateForCell.year &&
-                 e.date.month == dateForCell.month &&
-                 e.date.day == dateForCell.day;
-        }).firstOrNull;
-
-        return GestureDetector(
-          onTap: match != null
-              ? () {
-                  EntryDetailSheet.show(
-                    context,
-                    match,
-                    onDelete: () {
-                      ref.read(moodNotifierProvider.notifier).deleteEntry(match.id);
-                    },
-                  );
-                }
-              : null,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: match != null
-                      ? Color(match.primaryColorValue)
-                      : Colors.white.withOpacity(0.05),
-                  border: Border.all(
-                    color: match != null
-                        ? Color(match.primaryColorValue).withOpacity(0.8)
-                        : Colors.white12,
-                  ),
-                  boxShadow: match != null
-                      ? [
-                          BoxShadow(
-                            color: Color(match.primaryColorValue).withOpacity(0.4),
-                            blurRadius: 8,
-                            spreadRadius: 1,
-                          )
-                        ]
-                      : [],
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '$dayNumber',
-                style: TextStyle(
-                  color: match != null ? Colors.white : Colors.white38,
-                  fontSize: 11,
-                  fontWeight: match != null ? FontWeight.bold : FontWeight.normal,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  static String _monthName(int month) {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    return months[month - 1];
   }
 }

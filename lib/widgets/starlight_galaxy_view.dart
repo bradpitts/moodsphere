@@ -1,118 +1,92 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+
 import '../models/mood_entry.dart';
 
 class StarlightGalaxyView extends StatefulWidget {
   final List<MoodEntry> entries;
+  final ValueChanged<MoodEntry>? onStarTap;
   final ValueChanged<MoodEntry>? onEntryTap;
 
   const StarlightGalaxyView({
-    super.key,
+    Key? key,
     required this.entries,
+    this.onStarTap,
     this.onEntryTap,
-  });
+  }) : super(key: key);
 
   @override
   State<StarlightGalaxyView> createState() => _StarlightGalaxyViewState();
 }
 
-class _StarlightGalaxyViewState extends State<StarlightGalaxyView> with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
-  final int _numBackgroundStars = 200;
-  List<_StarPoint> _backgroundStars = [];
-  List<_StarPoint> _moodStars = [];
+class _StarlightGalaxyViewState extends State<StarlightGalaxyView>
+    with SingleTickerProviderStateMixin {
+  double _userYaw = 0.0;
+  double _userPitch = 0.0;
+  double _scale = 1.0;
+  Offset _lastTouch = Offset.zero;
 
-  double _viewRotationY = 0.0;
-  double _viewRotationX = 0.0;
-  Offset? _lastPanOffset;
+  late AnimationController _spaceDriftController;
 
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
+    // Continuous 60 FPS Space Drift Ticker Animation
+    _spaceDriftController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 100),
+      duration: const Duration(seconds: 40),
     )..repeat();
-    _generateGalaxy();
-  }
-
-  @override
-  void didUpdateWidget(StarlightGalaxyView oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.entries != widget.entries) {
-      _generateMoodStars();
-    }
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
+    _spaceDriftController.dispose();
     super.dispose();
   }
 
-  void _generateGalaxy() {
-    _backgroundStars = List.generate(_numBackgroundStars, (index) {
-      return _StarPoint(
-        x: (math.Random().nextDouble() - 0.5) * 1200,
-        y: (math.Random().nextDouble() - 0.5) * 1200,
-        z: (math.Random().nextDouble() - 0.5) * 1200,
-        size: math.Random().nextDouble() * 2.5 + 0.5,
-        opacity: math.Random().nextDouble() * 0.6 + 0.2,
-      );
-    });
-    _generateMoodStars();
-  }
+  void _handleTapUp(TapUpDetails details, Size size) {
+    if (widget.entries.isEmpty) return;
 
-  void _generateMoodStars() {
-    _moodStars = widget.entries.map((entry) {
-      return _StarPoint(
-        x: (math.Random().nextDouble() - 0.5) * 400,
-        y: (math.Random().nextDouble() - 0.5) * 400,
-        z: (math.Random().nextDouble() - 0.5) * 400,
-        size: 8.0,
-        opacity: 1.0,
-        entry: entry,
-      );
-    }).toList();
-  }
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2.5 * _scale;
+    final goldenRatio = (1 + math.sqrt(5)) / 2;
 
-  Offset _project(double x, double y, double z, double width, double height) {
-    double perspective = 1000 / (1000 + z);
-    return Offset(
-      (x * perspective) + width / 2,
-      (y * perspective) + height / 2,
-    );
-  }
+    final driftVal = _spaceDriftController.value * 2 * math.pi;
+    final yaw = _userYaw + driftVal * 0.12;
+    final pitch = _userPitch + math.sin(driftVal) * 0.04;
 
-  void _handleTap(TapUpDetails details, Size size) {
-    double angleY = _viewRotationY + (_animationController.value * 2 * math.pi * 0.2);
-    double angleX = _viewRotationX;
+    MoodEntry? tappedEntry;
+    double minDistance = 32.0;
 
-    for (var star in _moodStars) {
-      double x = star.x;
-      double y = star.y;
-      double z = star.z;
+    for (int i = 0; i < widget.entries.length; i++) {
+      final entry = widget.entries[i];
+      final y = 1 - (i / math.max(1, widget.entries.length - 1)) * 1.8;
+      final radiusAtY = math.sqrt(math.max(0, 1 - y * y));
+      final theta = 2 * math.pi * i / goldenRatio;
 
-      double nextX = x * math.cos(angleY) + z * math.sin(angleY);
-      double nextZ = -x * math.sin(angleY) + z * math.cos(angleY);
-      x = nextX;
-      z = nextZ;
+      final x0 = math.cos(theta) * radiusAtY;
+      final z0 = math.sin(theta) * radiusAtY;
 
-      double nextY = y * math.cos(angleX) - z * math.sin(angleX);
-      nextZ = y * math.sin(angleX) + z * math.cos(angleX);
-      y = nextY;
-      z = nextZ;
+      // 3D Matrix Rotations
+      final x1 = x0;
+      final y1 = y * math.cos(pitch) - z0 * math.sin(pitch);
+      final z1 = y * math.sin(pitch) + z0 * math.cos(pitch);
 
-      Offset projected = _project(x, y, z, size.width, size.height);
-      double perspectiveFactor = 1000 / (1000 + z);
-      double scaledRadius = star.size * perspectiveFactor;
+      final x2 = x1 * math.cos(yaw) + z1 * math.sin(yaw);
+      final y2 = y1;
 
-      if ((details.localPosition - projected).distance <= math.max(scaledRadius * 2, 32.0)) {
-        if (widget.onEntryTap != null && star.entry != null) {
-          widget.onEntryTap!(star.entry!);
-        }
-        return;
+      final screenPos = Offset(center.dx + x2 * radius, center.dy + y2 * radius);
+      final dist = (details.localPosition - screenPos).distance;
+
+      if (dist < minDistance) {
+        minDistance = dist;
+        tappedEntry = entry;
       }
+    }
+
+    if (tappedEntry != null) {
+      widget.onStarTap?.call(tappedEntry);
+      widget.onEntryTap?.call(tappedEntry);
     }
   }
 
@@ -123,35 +97,36 @@ class _StarlightGalaxyViewState extends State<StarlightGalaxyView> with SingleTi
         final size = Size(constraints.maxWidth, constraints.maxHeight);
 
         return GestureDetector(
-          onPanStart: (details) {
-            _lastPanOffset = details.localPosition;
+          onTapUp: (details) => _handleTapUp(details, size),
+          onScaleStart: (details) {
+            _lastTouch = details.focalPoint;
           },
-          onPanUpdate: (details) {
-            if (_lastPanOffset != null) {
-              setState(() {
-                _viewRotationY += (details.localPosition.dx - _lastPanOffset!.dx) * 0.003;
-                _viewRotationX += (details.localPosition.dy - _lastPanOffset!.dy) * 0.003;
-                _lastPanOffset = details.localPosition;
-              });
-            }
+          onScaleUpdate: (details) {
+            setState(() {
+              _scale = (_scale * details.scale).clamp(0.6, 2.5);
+              final delta = details.focalPoint - _lastTouch;
+              _userYaw += delta.dx * 0.006;
+              _userPitch += delta.dy * 0.006;
+              _lastTouch = details.focalPoint;
+            });
           },
-          onPanEnd: (_) {
-            _lastPanOffset = null;
-          },
-          onTapUp: (details) => _handleTap(details, size),
           child: Container(
             color: const Color(0xFF05050B),
             child: AnimatedBuilder(
-              animation: _animationController,
+              animation: _spaceDriftController,
               builder: (context, child) {
+                final driftVal = _spaceDriftController.value;
+                final totalYaw = _userYaw + driftVal * 2 * math.pi * 0.12;
+                final totalPitch = _userPitch + math.sin(driftVal * 2 * math.pi) * 0.04;
+
                 return CustomPaint(
-                  size: Size.infinite,
-                  painter: _GalaxyPainter(
-                    backgroundStars: _backgroundStars,
-                    moodStars: _moodStars,
-                    animationValue: _animationController.value,
-                    viewRotationX: _viewRotationX,
-                    viewRotationY: _viewRotationY,
+                  size: size,
+                  painter: _GalaxySpaceDriftPainter(
+                    entries: widget.entries,
+                    yaw: totalYaw,
+                    pitch: totalPitch,
+                    scale: _scale,
+                    driftVal: driftVal,
                   ),
                 );
               },
@@ -163,136 +138,191 @@ class _StarlightGalaxyViewState extends State<StarlightGalaxyView> with SingleTi
   }
 }
 
-class _StarPoint {
-  final double x, y, z;
-  final double size;
-  final double opacity;
-  final MoodEntry? entry;
+class _GalaxySpaceDriftPainter extends CustomPainter {
+  final List<MoodEntry> entries;
+  final double yaw;
+  final double pitch;
+  final double scale;
+  final double driftVal;
 
-  _StarPoint({
-    required this.x,
-    required this.y,
-    required this.z,
-    required this.size,
-    required this.opacity,
-    this.entry,
+  _GalaxySpaceDriftPainter({
+    required this.entries,
+    required this.yaw,
+    required this.pitch,
+    required this.scale,
+    required this.driftVal,
   });
-}
-
-class _GalaxyPainter extends CustomPainter {
-  final List<_StarPoint> backgroundStars;
-  final List<_StarPoint> moodStars;
-  final double animationValue;
-  final double viewRotationX;
-  final double viewRotationY;
-
-  _GalaxyPainter({
-    required this.backgroundStars,
-    required this.moodStars,
-    required this.animationValue,
-    required this.viewRotationX,
-    required this.viewRotationY,
-  });
-
-  Offset _project(double x, double y, double z, double width, double height) {
-    double perspective = 1000 / (1000 + z);
-    return Offset(
-      (x * perspective) + width / 2,
-      (y * perspective) + height / 2,
-    );
-  }
 
   @override
   void paint(Canvas canvas, Size size) {
-    double driftAngleY = viewRotationY + (animationValue * 2 * math.pi * 0.2);
-    double rotateAngleX = viewRotationX;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2.5 * scale;
 
-    final bgPaint = Paint()..style = PaintingStyle.fill;
-    for (var star in backgroundStars) {
-      double x = star.x;
-      double y = star.y;
-      double z = star.z;
+    // 1. Render 5 Parallax Nebula Dust Clouds Drifting & Looping Across Screen Boundaries
+    _drawParallaxDustClouds(canvas, size);
 
-      double nextX = x * math.cos(driftAngleY) + z * math.sin(driftAngleY);
-      double nextZ = -x * math.sin(driftAngleY) + z * math.cos(driftAngleY);
-      x = nextX;
-      z = nextZ;
+    // 2. Render 220 Background Stars Scattered Uniformly Across Vast 3D Volume [-600, 600]
+    final starRandom = math.Random(101);
+    final driftOffsetZ = (driftVal * 300) % 600;
 
-      double nextY = y * math.cos(rotateAngleX) - z * math.sin(rotateAngleX);
-      nextZ = y * math.sin(rotateAngleX) + z * math.cos(rotateAngleX);
-      y = nextY;
-      z = nextZ;
+    for (int i = 0; i < 220; i++) {
+      // Uniform 3D Cartesian coordinates in [-600, 600]
+      final rawX = (starRandom.nextDouble() - 0.5) * 1200;
+      final rawY = (starRandom.nextDouble() - 0.5) * 1200;
+      final rawZ = (starRandom.nextDouble() - 0.5) * 1200 + driftOffsetZ;
 
-      if (z > 600) continue;
+      // Wrap Z depth seamlessly
+      final wrappedZ = ((rawZ + 600) % 1200) - 600;
 
-      Offset projected = _project(x, y, z, size.width, size.height);
-      double perspectiveFactor = 1000 / (1000 + z);
-      double scaledSize = star.size * perspectiveFactor;
-      double depthOpacity = star.opacity * ((600 - z) / 1200).clamp(0.1, 1.0);
+      // 3D Matrix Yaw/Pitch rotation
+      final rotX = rawX * math.cos(yaw) - wrappedZ * math.sin(yaw);
+      final rotZ = rawX * math.sin(yaw) + wrappedZ * math.cos(yaw);
+      final rotY = rawY * math.cos(pitch) - rotZ * math.sin(pitch);
 
-      canvas.drawCircle(
-        projected,
-        scaledSize,
-        bgPaint..color = Colors.white.withOpacity(depthOpacity),
-      );
+      final perspectiveFactor = (800.0 / (800.0 + rotZ)).clamp(0.2, 2.0);
+      final sx = center.dx + rotX * perspectiveFactor * 0.7;
+      final sy = center.dy + rotY * perspectiveFactor * 0.7;
+
+      if (sx >= -20 && sx <= size.width + 20 && sy >= -20 && sy <= size.height + 20) {
+        final sSize = (starRandom.nextDouble() * 2.0 + 0.8) * perspectiveFactor;
+        final twinkle = math.sin((driftVal * 4 * math.pi) + i) * 0.35 + 0.55;
+
+        final starPaint = Paint()
+          ..color = Colors.white.withOpacity(twinkle.clamp(0.15, 0.9));
+        canvas.drawCircle(Offset(sx, sy), sSize, starPaint);
+      }
     }
 
-    canvas.saveLayer(Rect.fromLTWH(0, 0, size.width, size.height), Paint()..blendMode = BlendMode.plus);
+    if (entries.isEmpty) return;
 
-    for (var star in moodStars) {
-      if (star.entry == null) continue;
+    // 3. Project Mood Entries into 3D Independent Celestial Stars (No Lines)
+    final starPoints = <Offset>[];
+    final starColors = <Color>[];
 
-      double x = star.x;
-      double y = star.y;
-      double z = star.z;
+    final goldenRatio = (1 + math.sqrt(5)) / 2;
 
-      double nextX = x * math.cos(driftAngleY) + z * math.sin(driftAngleY);
-      double nextZ = -x * math.sin(driftAngleY) + z * math.cos(driftAngleY);
-      x = nextX;
-      z = nextZ;
+    for (int i = 0; i < entries.length; i++) {
+      final entry = entries[i];
+      final y = 1 - (i / math.max(1, entries.length - 1)) * 1.8;
+      final radiusAtY = math.sqrt(math.max(0, 1 - y * y));
+      final theta = 2 * math.pi * i / goldenRatio;
 
-      double nextY = y * math.cos(rotateAngleX) - z * math.sin(rotateAngleX);
-      nextZ = y * math.sin(rotateAngleX) + z * math.cos(rotateAngleX);
-      y = nextY;
-      z = nextZ;
+      final x0 = math.cos(theta) * radiusAtY;
+      final z0 = math.sin(theta) * radiusAtY;
 
-      Offset projected = _project(x, y, z, size.width, size.height);
-      double perspectiveFactor = 1000 / (1000 + z);
-      double scaledRadius = 8.0 * perspectiveFactor;
-      double depthOpacity = ((300 - z) / 500).clamp(0.3, 1.0);
+      // 3D Matrix Rotations
+      final x1 = x0;
+      final y1 = y * math.cos(pitch) - z0 * math.sin(pitch);
+      final z1 = y * math.sin(pitch) + z0 * math.cos(pitch);
 
-      final primaryColor = Color(star.entry!.primaryColorValue);
+      final x2 = x1 * math.cos(yaw) + z1 * math.sin(yaw);
+      final y2 = y1;
 
-      canvas.drawCircle(
-        projected,
-        scaledRadius * 2.5,
-        Paint()
-          ..color = primaryColor.withOpacity(0.4 * depthOpacity)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12),
-      );
-
-      canvas.drawCircle(
-        projected,
-        scaledRadius * 1.5,
-        Paint()
-          ..color = primaryColor.withOpacity(0.7 * depthOpacity)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
-      );
-
-      canvas.drawCircle(
-        projected,
-        scaledRadius * 0.7,
-        Paint()..color = Colors.white.withOpacity(0.9 * depthOpacity),
-      );
+      final screenPos = Offset(center.dx + x2 * radius, center.dy + y2 * radius);
+      starPoints.add(screenPos);
+      starColors.add(Color(entry.primaryColorValue));
     }
-    canvas.restore();
+
+    // 4. Render Mood Stars with Multi-Layered Radial Light Halos
+    for (int i = 0; i < starPoints.length; i++) {
+      final pos = starPoints[i];
+      final color = starColors[i];
+
+      final outerHaloPaint = Paint()
+        ..shader = RadialGradient(
+          colors: [
+            color.withOpacity(0.85),
+            color.withOpacity(0.3),
+            Colors.transparent,
+          ],
+          stops: const [0.0, 0.5, 1.0],
+        ).createShader(Rect.fromCircle(center: pos, radius: 26))
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+
+      canvas.drawCircle(pos, 26, outerHaloPaint);
+
+      final corePaint = Paint()..color = Colors.white;
+      canvas.drawCircle(pos, 5.5, corePaint);
+    }
+  }
+
+  void _drawParallaxDustClouds(Canvas canvas, Size size) {
+    // 5 Parallax Nebula Dust Cloud Layers drifting at varied speeds across screen boundaries
+    final clouds = [
+      // Cosmic Purple #2A004F
+      _DustCloudSpec(
+        baseCenter: Offset(size.width * 0.2, size.height * 0.3),
+        radius: size.width * 0.7,
+        color: const Color(0xFF2A004F),
+        speedX: 0.25,
+        speedY: 0.1,
+      ),
+      // Deep Teal #002A38
+      _DustCloudSpec(
+        baseCenter: Offset(size.width * 0.75, size.height * 0.65),
+        radius: size.width * 0.8,
+        color: const Color(0xFF002A38),
+        speedX: -0.3,
+        speedY: 0.15,
+      ),
+      // Magenta #3B0029
+      _DustCloudSpec(
+        baseCenter: Offset(size.width * 0.4, size.height * 0.8),
+        radius: size.width * 0.65,
+        color: const Color(0xFF3B0029),
+        speedX: 0.35,
+        speedY: -0.2,
+      ),
+      // Indigo Nebula
+      _DustCloudSpec(
+        baseCenter: Offset(size.width * 0.85, size.height * 0.25),
+        radius: size.width * 0.6,
+        color: const Color(0xFF16003B),
+        speedX: -0.2,
+        speedY: -0.15,
+      ),
+    ];
+
+    for (var cloud in clouds) {
+      // Parallax drifting & looping offset math
+      final offsetX = (driftVal * size.width * cloud.speedX) % (size.width * 1.4);
+      final offsetY = (driftVal * size.height * cloud.speedY) % (size.height * 1.4);
+
+      final currentPos = Offset(
+        (cloud.baseCenter.dx + offsetX) % (size.width + cloud.radius) - (cloud.radius * 0.5),
+        (cloud.baseCenter.dy + offsetY) % (size.height + cloud.radius) - (cloud.radius * 0.5),
+      );
+
+      final cloudPaint = Paint()
+        ..shader = RadialGradient(
+          colors: [
+            cloud.color.withOpacity(0.55),
+            cloud.color.withOpacity(0.2),
+            Colors.transparent,
+          ],
+          stops: const [0.0, 0.55, 1.0],
+        ).createShader(Rect.fromCircle(center: currentPos, radius: cloud.radius));
+
+      canvas.drawCircle(currentPos, cloud.radius, cloudPaint);
+    }
   }
 
   @override
-  bool shouldRepaint(covariant _GalaxyPainter oldDelegate) {
-    return oldDelegate.animationValue != animationValue ||
-           oldDelegate.viewRotationX != viewRotationX ||
-           oldDelegate.viewRotationY != viewRotationY ||
-           oldDelegate.moodStars != moodStars;
-  }
+  bool shouldRepaint(covariant _GalaxySpaceDriftPainter oldDelegate) => true;
+}
+
+class _DustCloudSpec {
+  final Offset baseCenter;
+  final double radius;
+  final Color color;
+  final double speedX;
+  final double speedY;
+
+  _DustCloudSpec({
+    required this.baseCenter,
+    required this.radius,
+    required this.color,
+    required this.speedX,
+    required this.speedY,
+  });
 }

@@ -1,98 +1,93 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+
 import '../models/mood_entry.dart';
 
 class Native3DSphere extends StatefulWidget {
   final List<MoodEntry> entries;
-  final ValueChanged<MoodEntry>? onEntryTap;
   final ValueChanged<MoodEntry>? onBeadTap;
+  final ValueChanged<MoodEntry>? onEntryTap;
 
   const Native3DSphere({
-    super.key,
+    Key? key,
     required this.entries,
-    this.onEntryTap,
     this.onBeadTap,
-  });
+    this.onEntryTap,
+  }) : super(key: key);
 
   @override
   State<Native3DSphere> createState() => _Native3DSphereState();
 }
 
-class _Native3DSphereState extends State<Native3DSphere> with SingleTickerProviderStateMixin {
-  late AnimationController _autoRotationController;
-  double _rotationX = 0.0;
-  double _rotationY = 0.0;
-  Offset? _lastPanOffset;
+class _Native3DSphereState extends State<Native3DSphere>
+    with SingleTickerProviderStateMixin {
+  double _yaw = 0.0;
+  double _pitch = 0.0;
+  Offset _lastTouchPos = Offset.zero;
 
-  final int _totalBeads = 100;
-  final double _sphereRadius = 120.0;
-  final double _beadRadius = 8.0;
+  late AnimationController _autoRotateController;
 
   @override
   void initState() {
     super.initState();
-    _autoRotationController = AnimationController(
+    _autoRotateController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 60),
-    )..repeat();
+      duration: const Duration(seconds: 25),
+    )..addListener(() {
+        setState(() {
+          _yaw += 0.005;
+        });
+      })
+    ..repeat();
   }
 
   @override
   void dispose() {
-    _autoRotationController.dispose();
+    _autoRotateController.dispose();
     super.dispose();
   }
 
-  Offset _project(double x, double y, double z, double width, double height) {
-    double perspective = 500 / (500 + z);
-    return Offset(
-      (x * perspective) + width / 2,
-      (y * perspective) + height / 2,
-    );
-  }
-
   void _handleTap(TapUpDetails details, Size size) {
-    final now = DateTime.now();
-    double angleY = _rotationY + (_autoRotationController.value * 2 * math.pi);
-    double angleX = _rotationX;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2.2;
+    final totalBeads = 100;
+    final goldenRatio = (1 + math.sqrt(5)) / 2;
 
-    for (int i = 0; i < _totalBeads; i++) {
-      double y = 1 - (i / (_totalBeads - 1)) * 2;
-      double radiusAtY = math.sqrt(1 - y * y);
-      double theta = (math.pi * (1 + math.sqrt(5))) * i;
-      double x = math.cos(theta) * radiusAtY;
-      double z = math.sin(theta) * radiusAtY;
+    MoodEntry? hitEntry;
+    double closestDistance = 30.0;
 
-      x *= _sphereRadius;
-      y *= _sphereRadius;
-      z *= _sphereRadius;
+    for (int i = 0; i < totalBeads; i++) {
+      final y = 1 - (i / (totalBeads - 1)) * 2;
+      final radiusAtY = math.sqrt(math.max(0, 1 - y * y));
+      final theta = 2 * math.pi * i / goldenRatio;
 
-      double nextX = x * math.cos(angleY) + z * math.sin(angleY);
-      double nextZ = -x * math.sin(angleY) + z * math.cos(angleY);
-      x = nextX;
-      z = nextZ;
+      final x0 = math.cos(theta) * radiusAtY;
+      final z0 = math.sin(theta) * radiusAtY;
 
-      double nextY = y * math.cos(angleX) - z * math.sin(angleX);
-      nextZ = y * math.sin(angleX) + z * math.cos(angleX);
-      y = nextY;
-      z = nextZ;
+      // Rotate around Pitch (X) and Yaw (Y)
+      final x1 = x0;
+      final y1 = y * math.cos(_pitch) - z0 * math.sin(_pitch);
+      final z1 = y * math.sin(_pitch) + z0 * math.cos(_pitch);
 
-      Offset projected = _project(x, y, z, size.width, size.height);
+      final x2 = x1 * math.cos(_yaw) + z1 * math.sin(_yaw);
+      final y2 = y1;
+      final z2 = -x1 * math.sin(_yaw) + z1 * math.cos(_yaw);
 
-      if ((details.localPosition - projected).distance <= _beadRadius * 1.8) {
-        final targetDate = now.subtract(Duration(days: i));
-        final MoodEntry? match = widget.entries.where((e) {
-          return e.date.year == targetDate.year &&
-                 e.date.month == targetDate.month &&
-                 e.date.day == targetDate.day;
-        }).firstOrNull;
+      // Project to 2D Screen
+      final screenX = center.dx + x2 * radius;
+      final screenY = center.dy + y2 * radius;
+      final dist = (Offset(screenX, screenY) - details.localPosition).distance;
 
-        if (match != null) {
-          if (widget.onEntryTap != null) widget.onEntryTap!(match);
-          if (widget.onBeadTap != null) widget.onBeadTap!(match);
-          return;
-        }
+      // Only hit beads facing forward (z2 > -0.2)
+      if (z2 > -0.2 && dist < closestDistance && i < widget.entries.length) {
+        closestDistance = dist;
+        hitEntry = widget.entries[i];
       }
+    }
+
+    if (hitEntry != null) {
+      widget.onBeadTap?.call(hitEntry);
+      widget.onEntryTap?.call(hitEntry);
     }
   }
 
@@ -104,40 +99,30 @@ class _Native3DSphereState extends State<Native3DSphere> with SingleTickerProvid
 
         return GestureDetector(
           onPanStart: (details) {
-            _autoRotationController.stop();
-            _lastPanOffset = details.localPosition;
+            _lastTouchPos = details.localPosition;
+            _autoRotateController.stop();
           },
           onPanUpdate: (details) {
-            if (_lastPanOffset != null) {
-              setState(() {
-                _rotationY += (details.localPosition.dx - _lastPanOffset!.dx) * 0.01;
-                _rotationX += (details.localPosition.dy - _lastPanOffset!.dy) * 0.01;
-                _lastPanOffset = details.localPosition;
-              });
-            }
+            final delta = details.localPosition - _lastTouchPos;
+            setState(() {
+              _yaw += delta.dx * 0.008;
+              _pitch += delta.dy * 0.008;
+            });
+            _lastTouchPos = details.localPosition;
           },
           onPanEnd: (_) {
-            _lastPanOffset = null;
-            _autoRotationController.repeat();
+            _autoRotateController.repeat();
           },
           onTapUp: (details) => _handleTap(details, size),
           child: Container(
-            color: Colors.transparent,
-            child: AnimatedBuilder(
-              animation: _autoRotationController,
-              builder: (context, child) {
-                return CustomPaint(
-                  size: Size.infinite,
-                  painter: _SpherePainter(
-                    entries: widget.entries,
-                    rotationX: _rotationX,
-                    rotationY: _rotationY + (_autoRotationController.value * 2 * math.pi),
-                    sphereRadius: _sphereRadius,
-                    beadRadius: _beadRadius,
-                    totalBeads: _totalBeads,
-                  ),
-                );
-              },
+            color: const Color(0xFF121212),
+            child: CustomPaint(
+              size: size,
+              painter: _SpherePainter(
+                entries: widget.entries,
+                yaw: _yaw,
+                pitch: _pitch,
+              ),
             ),
           ),
         );
@@ -148,132 +133,99 @@ class _Native3DSphereState extends State<Native3DSphere> with SingleTickerProvid
 
 class _SpherePainter extends CustomPainter {
   final List<MoodEntry> entries;
-  final double rotationX;
-  final double rotationY;
-  final double sphereRadius;
-  final double beadRadius;
-  final int totalBeads;
+  final double yaw;
+  final double pitch;
 
   _SpherePainter({
     required this.entries,
-    required this.rotationX,
-    required this.rotationY,
-    required this.sphereRadius,
-    required this.beadRadius,
-    required this.totalBeads,
+    required this.yaw,
+    required this.pitch,
   });
-
-  Offset _project(double x, double y, double z, double width, double height) {
-    double perspective = 500 / (500 + z);
-    return Offset(
-      (x * perspective) + width / 2,
-      (y * perspective) + height / 2,
-    );
-  }
 
   @override
   void paint(Canvas canvas, Size size) {
-    final now = DateTime.now();
-    List<_BeadProjected> projectedBeads = [];
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2.3;
+    final totalBeads = 100;
+    final goldenRatio = (1 + math.sqrt(5)) / 2;
+
+    // Draw central glowing wireframe core
+    final wirePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0
+      ..color = Colors.white.withOpacity(0.08);
+    canvas.drawCircle(center, radius, wirePaint);
+
+    final points = <_Bead3D>[];
 
     for (int i = 0; i < totalBeads; i++) {
-      double y = 1 - (i / (totalBeads - 1)) * 2;
-      double radiusAtY = math.sqrt(1 - y * y);
-      double theta = (math.pi * (1 + math.sqrt(5))) * i;
-      double x = math.cos(theta) * radiusAtY;
-      double z = math.sin(theta) * radiusAtY;
+      final y = 1 - (i / (totalBeads - 1)) * 2;
+      final radiusAtY = math.sqrt(math.max(0, 1 - y * y));
+      final theta = 2 * math.pi * i / goldenRatio;
 
-      x *= sphereRadius;
-      y *= sphereRadius;
-      z *= sphereRadius;
+      final x0 = math.cos(theta) * radiusAtY;
+      final z0 = math.sin(theta) * radiusAtY;
 
-      double nextX = x * math.cos(rotationY) + z * math.sin(rotationY);
-      double nextZ = -x * math.sin(rotationY) + z * math.cos(rotationY);
-      x = nextX;
-      z = nextZ;
+      // 3D Matrix Rotations
+      final x1 = x0;
+      final y1 = y * math.cos(pitch) - z0 * math.sin(pitch);
+      final z1 = y * math.sin(pitch) + z0 * math.cos(pitch);
 
-      double nextY = y * math.cos(rotationX) - z * math.sin(rotationX);
-      nextZ = y * math.sin(rotationX) + z * math.cos(rotationX);
-      y = nextY;
-      z = nextZ;
+      final x2 = x1 * math.cos(yaw) + z1 * math.sin(yaw);
+      final y2 = y1;
+      final z2 = -x1 * math.sin(yaw) + z1 * math.cos(yaw);
 
-      final targetDate = now.subtract(Duration(days: i));
-      final MoodEntry? match = entries.where((e) {
-        return e.date.year == targetDate.year &&
-               e.date.month == targetDate.month &&
-               e.date.day == targetDate.day;
-      }).firstOrNull;
+      final hasEntry = i < entries.length;
+      final entry = hasEntry ? entries[i] : null;
 
-      Offset projectedPoint = _project(x, y, z, size.width, size.height);
-      
-      projectedBeads.add(_BeadProjected(
-        point: projectedPoint,
-        depth: z,
-        entry: match,
+      points.add(_Bead3D(
+        x: x2,
+        y: y2,
+        z: z2,
+        entry: entry,
       ));
     }
 
-    projectedBeads.sort((a, b) => b.depth.compareTo(a.depth));
+    // Sort by Z depth for 3D painter ordering
+    points.sort((a, b) => a.z.compareTo(b.z));
 
-    final glassPaint = Paint()
-      ..color = Colors.white.withOpacity(0.15)
-      ..style = PaintingStyle.fill;
+    for (var bead in points) {
+      final screenX = center.dx + bead.x * radius;
+      final screenY = center.dy + bead.y * radius;
+      final depthFactor = ((bead.z + 1) / 2.0).clamp(0.1, 1.0);
 
-    final glassBorderPaint = Paint()
-      ..color = Colors.white.withOpacity(0.3)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.5;
+      final beadRadius = (10.0 + (depthFactor * 6.0));
+      final opacity = (0.2 + (depthFactor * 0.8)).clamp(0.1, 1.0);
 
-    for (var bead in projectedBeads) {
-      double perspectiveFactor = 500 / (500 + bead.depth);
-      double scaledRadius = beadRadius * perspectiveFactor;
-      double depthOpacity = ((sphereRadius - bead.depth) / (2 * sphereRadius)).clamp(0.2, 1.0);
+      final color = bead.entry != null
+          ? Color(bead.entry!.primaryColorValue)
+          : Colors.white.withOpacity(0.15);
 
-      if (bead.entry != null) {
-        final primaryColor = Color(bead.entry!.primaryColorValue);
-        
-        canvas.drawCircle(
-          bead.point,
-          scaledRadius * 1.8,
-          Paint()
-            ..color = primaryColor.withOpacity(0.3 * depthOpacity)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
-        );
+      final beadPaint = Paint()
+        ..color = color.withOpacity(opacity)
+        ..style = PaintingStyle.fill;
 
-        canvas.drawCircle(
-          bead.point,
-          scaledRadius,
-          Paint()..color = primaryColor.withOpacity(depthOpacity),
-        );
+      canvas.drawCircle(Offset(screenX, screenY), beadRadius, beadPaint);
 
-        canvas.drawCircle(
-          bead.point,
-          scaledRadius,
-          glassBorderPaint..color = Colors.white.withOpacity(0.4 * depthOpacity),
-        );
-      } else {
-        canvas.drawCircle(bead.point, scaledRadius, glassPaint..color = Colors.white.withOpacity(0.1 * depthOpacity));
-        canvas.drawCircle(bead.point, scaledRadius, glassBorderPaint..color = Colors.white.withOpacity(0.2 * depthOpacity));
-      }
+      // Glass specular highlight
+      final highlightPaint = Paint()
+        ..color = Colors.white.withOpacity(opacity * 0.4)
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(
+        Offset(screenX - beadRadius * 0.3, screenY - beadRadius * 0.3),
+        beadRadius * 0.35,
+        highlightPaint,
+      );
     }
   }
 
   @override
-  bool shouldRepaint(covariant _SpherePainter oldDelegate) {
-    return oldDelegate.rotationX != rotationX ||
-           oldDelegate.rotationY != rotationY ||
-           oldDelegate.entries != entries;
-  }
+  bool shouldRepaint(covariant _SpherePainter oldDelegate) => true;
 }
 
-class _BeadProjected {
-  final Offset point;
-  final double depth;
+class _Bead3D {
+  final double x, y, z;
   final MoodEntry? entry;
 
-  _BeadProjected({
-    required this.point,
-    required this.depth,
-    this.entry,
-  });
+  _Bead3D({required this.x, required this.y, required this.z, this.entry});
 }
