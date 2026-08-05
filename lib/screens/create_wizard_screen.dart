@@ -322,6 +322,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
                 points: [localPos],
                 color: _selectedMood.color,
                 strokeWidth: _brushSize,
+                tool: _selectedTool,
               );
               _recalculatePercentages();
             });

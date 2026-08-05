@@ -1,15 +1,19 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
+enum BrushTool { paintbrush, spray, marker }
+
 class PaintStroke {
   final List<Offset> points;
   final Color color;
   final double strokeWidth;
+  final BrushTool tool;
 
   PaintStroke({
     required this.points,
     required this.color,
     this.strokeWidth = 36.0,
+    this.tool = BrushTool.paintbrush,
   });
 }
 
@@ -29,7 +33,7 @@ class OrbPainter extends CustomPainter {
     final circleRect = Rect.fromCircle(center: center, radius: radius);
     final circlePath = Path()..addOval(circleRect);
 
-    // 1. Glass Rim Border
+    // 1. Glass Rim Outer Border
     final rimPaint = Paint()
       ..color = Colors.white.withOpacity(0.25)
       ..style = PaintingStyle.stroke
@@ -37,18 +41,18 @@ class OrbPainter extends CustomPainter {
 
     canvas.drawCircle(center, radius, rimPaint);
 
-    // 2. Clip all paint strokes strictly inside the glass sphere
+    // 2. Clip all painting strictly inside glass sphere
     canvas.save();
     canvas.clipPath(circlePath);
 
-    // Glass Interior Base (100% Blank Translucent Fill)
+    // Blank Glass Interior Base (Translucent)
     canvas.drawCircle(
       center,
       radius,
       Paint()..color = Colors.white.withOpacity(0.04),
     );
 
-    // 3. Render Watercolor Brush Strokes on Offscreen Layer
+    // 3. Render Freehand Strokes on Offscreen Blending Layer
     canvas.saveLayer(circleRect, Paint()..blendMode = BlendMode.srcOver);
 
     final allStrokes = [...strokes];
@@ -57,22 +61,40 @@ class OrbPainter extends CustomPainter {
     for (var stroke in allStrokes) {
       if (stroke.points.isEmpty) continue;
 
+      double blurRadius = 18.0;
+      double opacity = 0.85;
+
+      switch (stroke.tool) {
+        case BrushTool.spray:
+          blurRadius = 32.0;
+          opacity = 0.55;
+          break;
+        case BrushTool.marker:
+          blurRadius = 6.0;
+          opacity = 0.95;
+          break;
+        case BrushTool.paintbrush:
+        default:
+          blurRadius = 18.0;
+          opacity = 0.85;
+          break;
+      }
+
       final strokePaint = Paint()
-        ..color = stroke.color.withOpacity(0.85)
+        ..color = stroke.color.withOpacity(opacity)
         ..style = PaintingStyle.stroke
         ..strokeWidth = stroke.strokeWidth
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18.0);
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, blurRadius);
 
       if (stroke.points.length == 1) {
-        // Draw single dab point
         canvas.drawCircle(
           stroke.points.first,
           stroke.strokeWidth / 2,
           Paint()
-            ..color = stroke.color.withOpacity(0.85)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18.0),
+            ..color = stroke.color.withOpacity(opacity)
+            ..maskFilter = MaskFilter.blur(BlurStyle.normal, blurRadius),
         );
       } else {
         final path = Path();
@@ -84,9 +106,9 @@ class OrbPainter extends CustomPainter {
       }
     }
 
-    canvas.restore(); // Restore stroke blending layer
+    canvas.restore(); // Restore stroke layer
 
-    // 4. Glass Specular Reflection Highlight (Top Left 3D Shine)
+    // 4. Glass Specular 3D Shine
     final highlightPath = Path()
       ..addOval(Rect.fromLTWH(
         center.dx - radius * 0.5,
