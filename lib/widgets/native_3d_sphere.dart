@@ -197,12 +197,19 @@ class _SpherePainter extends CustomPainter {
       final beadRadius = (10.0 + (depthFactor * 6.0));
       final opacity = (0.2 + (depthFactor * 0.8)).clamp(0.1, 1.0);
 
-      final color = bead.entry != null
-          ? Color(bead.entry!.primaryColorValue)
-          : Colors.white.withOpacity(0.15);
+      final Color baseColor;
+      final double baseAlpha;
+
+      if (bead.entry != null) {
+        baseColor = Color(bead.entry!.primaryColorValue);
+        baseAlpha = opacity;
+      } else {
+        baseColor = Colors.white;
+        baseAlpha = opacity * 0.18;
+      }
 
       final beadPaint = Paint()
-        ..color = color.withOpacity(opacity)
+        ..color = baseColor.withOpacity(baseAlpha)
         ..style = PaintingStyle.fill;
 
       canvas.drawCircle(Offset(screenX, screenY), beadRadius, beadPaint);

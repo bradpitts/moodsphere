@@ -12,7 +12,7 @@ class PaintStroke {
   PaintStroke({
     required this.points,
     required this.color,
-    this.strokeWidth = 36.0,
+    this.strokeWidth = 32.0,
     this.tool = BrushTool.paintbrush,
   });
 }
@@ -20,11 +20,24 @@ class PaintStroke {
 class OrbPainter extends CustomPainter {
   final List<PaintStroke> strokes;
   final PaintStroke? currentStroke;
+  final Map<String, double>? moodPercentages; // Used for multi-color fallback on saved entries
 
   OrbPainter({
     required this.strokes,
     this.currentStroke,
+    this.moodPercentages,
   });
+
+  static const Map<String, Color> moodColorMap = {
+    'Joy': Color(0xFFFFD700),
+    'Serenity': Color(0xFF4EECD5),
+    'Love': Color(0xFFFF5252),
+    'Longing': Color(0xFF448AFF),
+    'Sadness': Color(0xFF29B6F6),
+    'Anger': Color(0xFFFF3D00),
+    'Disgust': Color(0xFF66BB6A),
+    'Fear': Color(0xFFAB47BC),
+  };
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -35,93 +48,108 @@ class OrbPainter extends CustomPainter {
 
     // 1. Glass Rim Outer Border
     final rimPaint = Paint()
-      ..color = Colors.white.withOpacity(0.25)
+      ..color = Colors.white.withOpacity(0.3)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
 
     canvas.drawCircle(center, radius, rimPaint);
 
-    // 2. Clip all painting strictly inside glass sphere
+    // 2. Clip all rendering inside glass sphere
     canvas.save();
     canvas.clipPath(circlePath);
 
-    // Blank Glass Interior Base (Translucent)
+    // Glass Translucent Base
     canvas.drawCircle(
       center,
       radius,
-      Paint()..color = Colors.white.withOpacity(0.04),
+      Paint()..color = const Color(0xFF1A1A26),
     );
-
-    // 3. Render Freehand Strokes on Offscreen Blending Layer
-    canvas.saveLayer(circleRect, Paint()..blendMode = BlendMode.srcOver);
 
     final allStrokes = [...strokes];
     if (currentStroke != null) allStrokes.add(currentStroke!);
 
-    for (var stroke in allStrokes) {
-      if (stroke.points.isEmpty) continue;
+    canvas.saveLayer(circleRect, Paint()..blendMode = BlendMode.srcOver);
 
-      double blurRadius = 18.0;
-      double opacity = 0.85;
+    if (allStrokes.isNotEmpty) {
+      // MODE A: Render Freehand Touch Strokes
+      for (var stroke in allStrokes) {
+        if (stroke.points.isEmpty) continue;
 
-      switch (stroke.tool) {
-        case BrushTool.spray:
-          blurRadius = 32.0;
-          opacity = 0.55;
-          break;
-        case BrushTool.marker:
-          blurRadius = 6.0;
-          opacity = 0.95;
-          break;
-        case BrushTool.paintbrush:
-        default:
-          blurRadius = 18.0;
-          opacity = 0.85;
-          break;
-      }
-
-      final strokePaint = Paint()
-        ..color = stroke.color.withOpacity(opacity)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = stroke.strokeWidth
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, blurRadius);
-
-      if (stroke.points.length == 1) {
-        canvas.drawCircle(
-          stroke.points.first,
-          stroke.strokeWidth / 2,
-          Paint()
-            ..color = stroke.color.withOpacity(opacity)
-            ..maskFilter = MaskFilter.blur(BlurStyle.normal, blurRadius),
-        );
-      } else {
-        final path = Path();
-        path.moveTo(stroke.points.first.dx, stroke.points.first.dy);
-        for (int i = 1; i < stroke.points.length; i++) {
-          path.lineTo(stroke.points[i].dx, stroke.points[i].dy);
+        double blur = 16.0;
+        switch (stroke.tool) {
+          case BrushTool.spray: blur = 28.0; break;
+          case BrushTool.marker: blur = 4.0; break;
+          case BrushTool.paintbrush: default: blur = 16.0; break;
         }
-        canvas.drawPath(path, strokePaint);
+
+        final strokePaint = Paint()
+          ..color = stroke.color.withOpacity(0.85)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke.strokeWidth
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, blur);
+
+        if (stroke.points.length == 1) {
+          canvas.drawCircle(
+            stroke.points.first,
+            stroke.strokeWidth / 2,
+            Paint()
+              ..color = stroke.color.withOpacity(0.85)
+              ..maskFilter = MaskFilter.blur(BlurStyle.normal, blur),
+          );
+        } else {
+          final path = Path();
+          path.moveTo(stroke.points.first.dx, stroke.points.first.dy);
+          for (int i = 1; i < stroke.points.length; i++) {
+            path.lineTo(stroke.points[i].dx, stroke.points[i].dy);
+          }
+          canvas.drawPath(path, strokePaint);
+        }
       }
+    } else if (moodPercentages != null && moodPercentages!.isNotEmpty) {
+      // MODE B: Render Multi-Color Blended Orb for Saved Entries
+      List<Color> colors = [];
+      moodPercentages!.forEach((key, val) {
+        if (val > 0) {
+          colors.add(moodColorMap[key] ?? const Color(0xFFFFD700));
+        }
+      });
+      if (colors.isEmpty) {
+        colors.add(const Color(0xFFFFD700));
+      }
+      if (colors.length == 1) colors.add(colors.first);
+
+      final sweepGradient = SweepGradient(
+        colors: colors,
+        center: Alignment.center,
+      );
+
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..shader = sweepGradient.createShader(circleRect)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20.0),
+      );
     }
 
     canvas.restore(); // Restore stroke layer
 
-    // 4. Glass Specular 3D Shine
+    // 3. Glass Specular 3D Reflection
     final highlightPath = Path()
       ..addOval(Rect.fromLTWH(
-        center.dx - radius * 0.5,
-        center.dy - radius * 0.65,
-        radius * 0.45,
-        radius * 0.25,
+        center.dx - radius * 0.45,
+        center.dy - radius * 0.6,
+        radius * 0.4,
+        radius * 0.22,
       ));
 
     canvas.drawPath(
       highlightPath,
       Paint()
-        ..color = Colors.white.withOpacity(0.25)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8.0),
+        ..color = Colors.white.withOpacity(0.22)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0),
     );
 
     canvas.restore(); // Restore clip

@@ -125,17 +125,12 @@ class EntryDetailSheet extends StatelessWidget {
                 children: [
                   // Centered Large Painted Orb Preview
                   SizedBox(
-                    width: 170,
-                    height: 170,
+                    width: 160,
+                    height: 160,
                     child: CustomPaint(
                       painter: OrbPainter(
-                        strokes: [
-                          PaintStroke(
-                            points: const [Offset(85, 85)],
-                            color: primaryColor,
-                            strokeWidth: 150,
-                          ),
-                        ],
+                        strokes: [],
+                        moodPercentages: entry.moodPercentages,
                       ),
                     ),
                   ),

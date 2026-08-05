@@ -313,8 +313,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
         // Interactive Orb Finger Painting Canvas
         GestureDetector(
           onPanStart: (details) {
-            final RenderBox renderBox = context.findRenderObject() as RenderBox;
-            final localPos = renderBox.globalToLocal(details.globalPosition);
+            final localPos = details.localPosition;
 
             setState(() {
               _currentMoodName = _selectedMood.name;
@@ -328,8 +327,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
             });
           },
           onPanUpdate: (details) {
-            final RenderBox renderBox = context.findRenderObject() as RenderBox;
-            final localPos = renderBox.globalToLocal(details.globalPosition);
+            final localPos = details.localPosition;
 
             if (_currentStroke != null) {
               setState(() {
