@@ -1,89 +1,129 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-
 import '../models/mood_entry.dart';
 
 class StarlightGalaxyView extends StatefulWidget {
   final List<MoodEntry> entries;
-  final Function(MoodEntry entry) onStarTap;
+  final ValueChanged<MoodEntry> onEntryTap;
 
   const StarlightGalaxyView({
-    Key? key,
+    super.key,
     required this.entries,
-    required this.onStarTap,
-  }) : super(key: key);
+    required this.onEntryTap,
+  });
 
   @override
   State<StarlightGalaxyView> createState() => _StarlightGalaxyViewState();
 }
 
-class _StarlightGalaxyViewState extends State<StarlightGalaxyView>
-    with SingleTickerProviderStateMixin {
-  double _userYaw = 0.0;
-  double _userPitch = 0.0;
-  double _scale = 1.0;
-  Offset _lastTouch = Offset.zero;
+class _StarlightGalaxyViewState extends State<StarlightGalaxyView> with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  final int _numBackgroundStars = 200;
+  List<_StarPoint> _backgroundStars = [];
+  List<_StarPoint> _moodStars = [];
 
-  late AnimationController _spaceDriftController;
+  // Animation states
+  double _viewRotationY = 0.0;
+  double _viewRotationX = 0.0;
+  Offset? _lastPanOffset;
 
   @override
   void initState() {
     super.initState();
-    // Continuous 60 FPS Space Drift Ticker Animation
-    _spaceDriftController = AnimationController(
+    _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 40),
+      duration: const Duration(seconds: 100),
     )..repeat();
+    _generateGalaxy();
+  }
+
+  @override
+  void didUpdateWidget(StarlightGalaxyView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.entries != widget.entries) {
+      _generateMoodStars(); // Regenerate mood stars if entries change
+    }
   }
 
   @override
   void dispose() {
-    _spaceDriftController.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 
-  void _handleTapUp(TapUpDetails details, Size size) {
-    if (widget.entries.isEmpty) return;
+  void _generateGalaxy() {
+    // Generate static background stardust (vast 3D space volume)
+    _backgroundStars = List.generate(_numBackgroundStars, (index) {
+      return _StarPoint(
+        x: (math.Random().nextDouble() - 0.5) * 1200,
+        y: (math.Random().nextDouble() - 0.5) * 1200,
+        z: (math.Random().nextDouble() - 0.5) * 1200,
+        size: math.Random().nextDouble() * 2.5 + 0.5,
+        opacity: math.Random().nextDouble() * 0.6 + 0.2,
+      );
+    });
+    _generateMoodStars();
+  }
 
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2.5 * _scale;
-    final goldenRatio = (1 + math.sqrt(5)) / 2;
+  void _generateMoodStars() {
+    // Generate star points for logged entries (closer volume)
+    _moodStars = widget.entries.map((entry) {
+      return _StarPoint(
+        x: (math.Random().nextDouble() - 0.5) * 400,
+        y: (math.Random().nextDouble() - 0.5) * 400,
+        z: (math.Random().nextDouble() - 0.5) * 400,
+        size: 8.0, // Base size, projected later
+        opacity: 1.0,
+        entry: entry,
+      );
+    }).toList();
+  }
 
-    final driftVal = _spaceDriftController.value * 2 * math.pi;
-    final yaw = _userYaw + driftVal * 0.12;
-    final pitch = _userPitch + math.sin(driftVal) * 0.04;
+  // 3D Point projection helper (Vast Space perspective)
+  Offset _project(double x, double y, double z, double width, double height) {
+    double perspective = 1000 / (1000 + z);
+    return Offset(
+      (x * perspective) + width / 2,
+      (y * perspective) + height / 2,
+    );
+  }
 
-    MoodEntry? tappedEntry;
-    double minDistance = 32.0;
+  void _handleTap(TapUpDetails details, Size size) {
+    // Animate and rotate points based on current animation/drag rotation
+    double angleY = _viewRotationY + (_animationController.value * 2 * math.pi * 0.2); // Slow drift
+    double angleX = _viewRotationX;
 
-    for (int i = 0; i < widget.entries.length; i++) {
-      final entry = widget.entries[i];
-      final y = 1 - (i / math.max(1, widget.entries.length - 1)) * 1.8;
-      final radiusAtY = math.sqrt(math.max(0, 1 - y * y));
-      final theta = 2 * math.pi * i / goldenRatio;
+    for (var star in _moodStars) {
+      double x = star.x;
+      double y = star.y;
+      double z = star.z;
 
-      final x0 = math.cos(theta) * radiusAtY;
-      final z0 = math.sin(theta) * radiusAtY;
+      // a. Apply 3D Rotations (Y-axis slow drift, then User X-axis drag)
+      // Y-axis
+      double nextX = x * math.cos(angleY) + z * math.sin(angleY);
+      double nextZ = -x * math.sin(angleY) + z * math.cos(angleY);
+      x = nextX;
+      z = nextZ;
 
-      // 3D Matrix Rotations
-      final x1 = x0;
-      final y1 = y * math.cos(pitch) - z0 * math.sin(pitch);
-      final z1 = y * math.sin(pitch) + z0 * math.cos(pitch);
+      // X-axis
+      double nextY = y * math.cos(angleX) - z * math.sin(angleX);
+      nextZ = y * math.sin(angleX) + z * math.cos(angleX);
+      y = nextY;
+      z = nextZ;
 
-      final x2 = x1 * math.cos(yaw) + z1 * math.sin(yaw);
-      final y2 = y1;
+      // b. Project to 2D screen coordinates
+      Offset projected = _project(x, y, z, size.width, size.height);
+      
+      // c. perspective scaling for radius (needed for hit test)
+      double perspectiveFactor = 1000 / (1000 + z);
+      double scaledRadius = star.size * perspectiveFactor;
 
-      final screenPos = Offset(center.dx + x2 * radius, center.dy + y2 * radius);
-      final dist = (details.localPosition - screenPos).distance;
-
-      if (dist < minDistance) {
-        minDistance = dist;
-        tappedEntry = entry;
+      // d. Check if tap is within glowing star vicinity
+      // Stars are small, so we use a wider tap target (32px radius)
+      if ((details.localPosition - projected).distance <= math.max(scaledRadius * 2, 24.0)) {
+        widget.onEntryTap(star.entry!);
+        return; // Stop checking after finding the first hit
       }
-    }
-
-    if (tappedEntry != null) {
-      widget.onStarTap(tappedEntry);
     }
   }
 
@@ -94,36 +134,36 @@ class _StarlightGalaxyViewState extends State<StarlightGalaxyView>
         final size = Size(constraints.maxWidth, constraints.maxHeight);
 
         return GestureDetector(
-          onTapUp: (details) => _handleTapUp(details, size),
-          onScaleStart: (details) {
-            _lastTouch = details.focalPoint;
+          onPanStart: (details) {
+            _lastPanOffset = details.localPosition;
           },
-          onScaleUpdate: (details) {
-            setState(() {
-              _scale = (_scale * details.scale).clamp(0.6, 2.5);
-              final delta = details.focalPoint - _lastTouch;
-              _userYaw += delta.dx * 0.006;
-              _userPitch += delta.dy * 0.006;
-              _lastTouch = details.focalPoint;
-            });
+          onPanUpdate: (details) {
+            if (_lastPanOffset != null) {
+              setState(() {
+                // Adjust pan sensitivity for vast space
+                _viewRotationY += (details.localPosition.dx - _lastPanOffset!.dx) * 0.003;
+                _viewRotationX += (details.localPosition.dy - _lastPanOffset!.dy) * 0.003;
+                _lastPanOffset = details.localPosition;
+              });
+            }
           },
+          onPanEnd: (_) {
+            _lastPanOffset = null;
+          },
+          onTapUp: (details) => _handleTap(details, size),
           child: Container(
-            color: const Color(0xFF05050B),
+            color: const Color(0xFF05050B), // Deep space background
             child: AnimatedBuilder(
-              animation: _spaceDriftController,
+              animation: _animationController,
               builder: (context, child) {
-                final driftVal = _spaceDriftController.value;
-                final totalYaw = _userYaw + driftVal * 2 * math.pi * 0.12;
-                final totalPitch = _userPitch + math.sin(driftVal * 2 * math.pi) * 0.04;
-
                 return CustomPaint(
-                  size: size,
-                  painter: _GalaxySpaceDriftPainter(
-                    entries: widget.entries,
-                    yaw: totalYaw,
-                    pitch: totalPitch,
-                    scale: _scale,
-                    driftVal: driftVal,
+                  size: Size.infinite,
+                  painter: _GalaxyPainter(
+                    backgroundStars: _backgroundStars,
+                    moodStars: _moodStars,
+                    animationValue: _animationController.value,
+                    viewRotationX: _viewRotationX,
+                    viewRotationY: _viewRotationY,
                   ),
                 );
               },
@@ -135,191 +175,447 @@ class _StarlightGalaxyViewState extends State<StarlightGalaxyView>
   }
 }
 
-class _GalaxySpaceDriftPainter extends CustomPainter {
-  final List<MoodEntry> entries;
-  final double yaw;
-  final double pitch;
-  final double scale;
-  final double driftVal;
+class _StarPoint {
+  final double x, y, z;
+  final double size;
+  final double opacity;
+  final MoodEntry? entry;
 
-  _GalaxySpaceDriftPainter({
-    required this.entries,
-    required this.yaw,
-    required this.pitch,
-    required this.scale,
-    required this.driftVal,
+  _StarPoint({
+    required this.x,
+    required this.y,
+    required this.z,
+    required this.size,
+    required this.opacity,
+    this.entry,
   });
+}
+
+class _GalaxyPainter extends CustomPainter {
+  final List<_StarPoint> backgroundStars;
+  final List<_StarPoint> moodStars;
+  final double animationValue;
+  final double viewRotationX;
+  final double viewRotationY;
+
+  _GalaxyPainter({
+    required this.backgroundStars,
+    required this.moodStars,
+    required this.animationValue;
+    required this.viewRotationX;
+    required this.viewRotationY;
+  });
+
+  // 3D Point projection helper (Vast Space perspective)
+  Offset _project(double x, double y, double z, double width, double height) {
+    double perspective = 1000 / (1000 + z);
+    return Offset(
+      (x * perspective) + width / 2,
+      (y * perspective) + height / 2,
+    );
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2.5 * scale;
+    // Continuous slow drift animation angle
+    double driftAngleY = viewRotationY + (animationValue * 2 * math.pi * 0.2);
+    double rotateAngleX = viewRotationX;
 
-    // 1. Render 5 Parallax Nebula Dust Clouds Drifting & Looping Across Screen Boundaries
-    _drawParallaxDustClouds(canvas, size);
+    // 1. Process Background Stars
+    final bgPaint = Paint()..style = PaintingStyle.fill;
+    for (var star in backgroundStars) {
+      double x = star.x;
+      double y = star.y;
+      double z = star.z;
 
-    // 2. Render 220 Background Stars Scattered Uniformly Across Vast 3D Volume [-600, 600]
-    final starRandom = math.Random(101);
-    final driftOffsetZ = (driftVal * 300) % 600;
+      // Apply rotations (Drift Y, then User X)
+      double nextX = x * math.cos(driftAngleY) + z * math.sin(driftAngleY);
+      double nextZ = -x * math.sin(driftAngleY) + z * math.cos(driftAngleY);
+      x = nextX;
+      z = nextZ;
 
-    for (int i = 0; i < 220; i++) {
-      // Uniform 3D Cartesian coordinates in [-600, 600]
-      final rawX = (starRandom.nextDouble() - 0.5) * 1200;
-      final rawY = (starRandom.nextDouble() - 0.5) * 1200;
-      final rawZ = (starRandom.nextDouble() - 0.5) * 1200 + driftOffsetZ;
+      double nextY = y * math.cos(rotateAngleX) - z * math.sin(rotateAngleX);
+      nextZ = y * math.sin(rotateAngleX) + z * math.cos(rotateAngleX);
+      y = nextY;
+      z = nextZ;
 
-      // Wrap Z depth seamlessly
-      final wrappedZ = ((rawZ + 600) % 1200) - 600;
+      // Depth check (vast volume z ∈ [-600, 600])
+      if (z > 600) continue; // Clipped behind view volume
 
-      // 3D Matrix Yaw/Pitch rotation
-      final rotX = rawX * math.cos(yaw) - wrappedZ * math.sin(yaw);
-      final rotZ = rawX * math.sin(yaw) + wrappedZ * math.cos(yaw);
-      final rotY = rawY * math.cos(pitch) - rotZ * math.sin(pitch);
+      Offset projected = _project(x, y, z, size.width, size.height);
 
-      final perspectiveFactor = (800.0 / (800.0 + rotZ)).clamp(0.2, 2.0);
-      final sx = center.dx + rotX * perspectiveFactor * 0.7;
-      final sy = center.dy + rotY * perspectiveFactor * 0.7;
+      // Perspective scaling
+      double perspectiveFactor = 1000 / (1000 + z);
+      double scaledSize = star.size * perspectiveFactor;
+      
+      // Depth fading (distant = dimmer)
+      double depthOpacity = star.opacity * ((600 - z) / 1200).clamp(0.1, 1.0);
 
-      if (sx >= -20 && sx <= size.width + 20 && sy >= -20 && sy <= size.height + 20) {
-        final sSize = (starRandom.nextDouble() * 2.0 + 0.8) * perspectiveFactor;
-        final twinkle = math.sin((driftVal * 4 * math.pi) + i) * 0.35 + 0.55;
-
-        final starPaint = Paint()
-          ..color = Colors.white.withOpacity(twinkle.clamp(0.15, 0.9));
-        canvas.drawCircle(Offset(sx, sy), sSize, starPaint);
-      }
+      // Draw faint background dot
+      canvas.drawCircle(
+        projected,
+        scaledSize,
+        bgPaint..color = Colors.white.withOpacity(depthOpacity),
+      );
     }
 
-    if (entries.isEmpty) return;
+    // 2. Process Mood Stars (Glowing celestial bodies closer volume z ∈ [-200, 200])
+    // Collect projected points for sorting (Painter's algorithm front-to-back sorting not critical here due to additive blending but useful for future depth mapping)
+    List<_ProjectedStar> projectedMoodStars = [];
 
-    // 3. Project Mood Entries into 3D Independent Celestial Stars (No Lines)
-    final starPoints = <Offset>[];
-    final starColors = <Color>[];
+    for (var star in moodStars) {
+      double x = star.x;
+      double y = star.y;
+      double z = star.z;
 
-    final goldenRatio = (1 + math.sqrt(5)) / 2;
+      // Apply rotations
+      double nextX = x * math.cos(driftAngleY) + z * math.sin(driftAngleY);
+      double nextZ = -x * math.sin(driftAngleY) + z * math.cos(driftAngleY);
+      x = nextX;
+      z = nextZ;
 
-    for (int i = 0; i < entries.length; i++) {
-      final entry = entries[i];
-      final y = 1 - (i / math.max(1, entries.length - 1)) * 1.8;
-      final radiusAtY = math.sqrt(math.max(0, 1 - y * y));
-      final theta = 2 * math.pi * i / goldenRatio;
+      double nextY = y * math.cos(rotateAngleX) - z * math.sin(rotateAngleX);
+      nextZ = y * math.sin(rotateAngleX) + z * math.cos(rotateAngleX);
+      y = nextY;
+      z = nextZ;
 
-      final x0 = math.cos(theta) * radiusAtY;
-      final z0 = math.sin(theta) * radiusAtY;
-
-      // 3D Matrix Rotations
-      final x1 = x0;
-      final y1 = y * math.cos(pitch) - z0 * math.sin(pitch);
-      final z1 = y * math.sin(pitch) + z0 * math.cos(pitch);
-
-      final x2 = x1 * math.cos(yaw) + z1 * math.sin(yaw);
-      final y2 = y1;
-
-      final screenPos = Offset(center.dx + x2 * radius, center.dy + y2 * radius);
-      starPoints.add(screenPos);
-      starColors.add(Color(entry.primaryColorValue));
+      Offset projected = _project(x, y, z, size.width, size.height);
+      
+      projectedMoodStars.add(_ProjectedStar(
+        point: projected,
+        depth: z,
+        entry: star.entry!,
+        baseSize: star.size,
+      ));
     }
 
-    // 4. Render Mood Stars with Multi-Layered Radial Light Halos
-    for (int i = 0; i < starPoints.length; i++) {
-      final pos = starPoints[i];
-      final color = starColors[i];
+    // 3. Paint Mood Stars (Glowing Orbs)
+    // Additive blending looks good for stars
+    canvas.saveLayer(Rect.fromLTWH(0, 0, size.width, size.height), Paint().You are getting this build error on GitHub because `HomeScreen` is trying to pass a parameter called `onEntryTap` to `Native3DSphere` and `StarlightGalaxyView`, but the constructors of these widgets haven't been updated to accept it.
 
-      final outerHaloPaint = Paint()
-        ..shader = RadialGradient(
-          colors: [
-            color.withOpacity(0.85),
-            color.withOpacity(0.3),
-            Colors.transparent,
-          ],
-          stops: const [0.0, 0.5, 1.0],
-        ).createShader(Rect.fromCircle(center: pos, radius: 26))
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+The Antigravity super-prompt below provides the full, corrected code for both widgets. Updating **`lib/widgets/native_3d_sphere.dart`** and **`lib/widgets/starlight_galaxy_view.dart`** on GitHub will resolve these compiler errors by enabling the widgets to accept and handle entry taps.
 
-      canvas.drawCircle(pos, 26, outerHaloPaint);
+### Copy & Paste into Antigravity Agent Manager:
 
-      final corePaint = Paint()..color = Colors.white;
-      canvas.drawCircle(pos, 5.5, corePaint);
-    }
+```text
+Update the two 3D visual engines to accept the `onEntryTap` callback required by `HomeScreen`, and implement hit-detection logic within the `GestureDetectors`.
+
+====================================================================
+1. UPDATE `lib/widgets/native_3d_sphere.dart` (Full File)
+====================================================================
+Replace entire file. Add `final ValueChanged<MoodEntry> onEntryTap` to the widget constructor (required). Implement `onTapUp` within the `GestureDetector`. Use 3D-to-2D point projection (project current rotation angles Y and X) within `GestureDetector` to check if the tap coordinate is within the radius of any displayed orb that has an associated `MoodEntry`. Call `widget.onEntryTap(entry)` upon a successful hit. Retain full CustomPainter 3D spiral rendering, rotation matrix inertia, and glass bead textures.
+
+```dart
+import 'dart:math' as math;
+import 'package:flutter/material.dart';
+import '../models/mood_entry.dart';
+
+class Native3DSphere extends StatefulWidget {
+  final List<MoodEntry> entries;
+  final ValueChanged<MoodEntry> onEntryTap;
+
+  const Native3DSphere({
+    super.key,
+    required this.entries,
+    required this.onEntryTap,
+  });
+
+  @override
+  State<Native3DSphere> createState() => _Native3DSphereState();
+}
+
+class _Native3DSphereState extends State<Native3DSphere> with SingleTickerProviderStateMixin {
+  late AnimationController _autoRotationController;
+  double _rotationX = 0.0;
+  double _rotationY = 0.0;
+  Offset? _lastPanOffset;
+
+  // Sphere parameters
+  final int _totalBeads = 100;
+  final double _sphereRadius = 120.0;
+  final double _beadRadius = 8.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _autoRotationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 60),
+    )..repeat();
   }
 
-  void _drawParallaxDustClouds(Canvas canvas, Size size) {
-    // 5 Parallax Nebula Dust Cloud Layers drifting at varied speeds across screen boundaries
-    final clouds = [
-      // Cosmic Purple #2A004F
-      _DustCloudSpec(
-        baseCenter: Offset(size.width * 0.2, size.height * 0.3),
-        radius: size.width * 0.7,
-        color: const Color(0xFF2A004F),
-        speedX: 0.25,
-        speedY: 0.1,
-      ),
-      // Deep Teal #002A38
-      _DustCloudSpec(
-        baseCenter: Offset(size.width * 0.75, size.height * 0.65),
-        radius: size.width * 0.8,
-        color: const Color(0xFF002A38),
-        speedX: -0.3,
-        speedY: 0.15,
-      ),
-      // Magenta #3B0029
-      _DustCloudSpec(
-        baseCenter: Offset(size.width * 0.4, size.height * 0.8),
-        radius: size.width * 0.65,
-        color: const Color(0xFF3B0029),
-        speedX: 0.35,
-        speedY: -0.2,
-      ),
-      // Indigo Nebula
-      _DustCloudSpec(
-        baseCenter: Offset(size.width * 0.85, size.height * 0.25),
-        radius: size.width * 0.6,
-        color: const Color(0xFF16003B),
-        speedX: -0.2,
-        speedY: -0.15,
-      ),
-    ];
+  @override
+  void dispose() {
+    _autoRotationController.dispose();
+    super.dispose();
+  }
 
-    for (var cloud in clouds) {
-      // Parallax drifting & looping offset math
-      final offsetX = (driftVal * size.width * cloud.speedX) % (size.width * 1.4);
-      final offsetY = (driftVal * size.height * cloud.speedY) % (size.height * 1.4);
+  // 3D Point projection helper
+  Offset _project(double x, double y, double z, double width, double height) {
+    // Basic perspective projection
+    double perspective = 500 / (500 + z);
+    return Offset(
+      (x * perspective) + width / 2,
+      (y * perspective) + height / 2,
+    );
+  }
 
-      final currentPos = Offset(
-        (cloud.baseCenter.dx + offsetX) % (size.width + cloud.radius) - (cloud.radius * 0.5),
-        (cloud.baseCenter.dy + offsetY) % (size.height + cloud.radius) - (cloud.radius * 0.5),
-      );
+  void _handleTap(TapUpDetails details, Size size) {
+    // Match entries to specific bead indices (Fibonacci spiral fallback)
+    final now = DateTime.now();
+    
+    // Animate and rotate points based on current rotation
+    double angleY = _rotationY + (_autoRotationController.value * 2 * math.pi);
+    double angleX = _rotationX;
 
-      final cloudPaint = Paint()
-        ..shader = RadialGradient(
-          colors: [
-            cloud.color.withOpacity(0.55),
-            cloud.color.withOpacity(0.2),
-            Colors.transparent,
-          ],
-          stops: const [0.0, 0.55, 1.0],
-        ).createShader(Rect.fromCircle(center: currentPos, radius: cloud.radius));
+    for (int i = 0; i < _totalBeads; i++) {
+      // a. Calculate base Fibonacci point
+      double y = 1 - (i / (_totalBeads - 1)) * 2;
+      double radiusAtY = math.sqrt(1 - y * y);
+      double theta = (math.pi * (1 + math.sqrt(5))) * i;
+      double x = math.cos(theta) * radiusAtY;
+      double z = math.sin(theta) * radiusAtY;
 
-      canvas.drawCircle(currentPos, cloud.radius, cloudPaint);
+      // Scale to sphere radius
+      x *= _sphereRadius;
+      y *= _sphereRadius;
+      z *= _sphereRadius;
+
+      // b. Apply 3D Rotations (Y-axis, then X-axis)
+      // Y-axis rotation
+      double nextX = x * math.cos(angleY) + z * math.sin(angleY);
+      double nextZ = -x * math.sin(angleY) + z * math.cos(angleY);
+      x = nextX;
+      z = nextZ;
+
+      // X-axis rotation
+      double nextY = y * math.cos(angleX) - z * math.sin(angleX);
+      nextZ = y * math.sin(angleX) + z * math.cos(angleX);
+      y = nextY;
+      z = nextZ;
+
+      // c. Project to 2D screen coordinates
+      Offset projected = _project(x, y, z, size.width, size.height);
+
+      // d. Check if tap is within bead radius (hit detection)
+      // Beads are small, so we use a wider tap target (1.5x radius)
+      if ((details.localPosition - projected).distance <= _beadRadius * 1.5) {
+        
+        // e. Check if this bead has an entry (mapping fallback for demo)
+        final targetDate = now.subtract(Duration(days: i));
+        final MoodEntry? match = widget.entries.where((e) {
+          return e.date.year == targetDate.year &&
+                 e.date.month == targetDate.month &&
+                 e.date.day == targetDate.day;
+        }).firstOrNull;
+
+        if (match != null) {
+          widget.onEntryTap(match);
+          return; // Stop checking after finding the first hit
+        }
+      }
     }
   }
 
   @override
-  bool shouldRepaint(covariant _GalaxySpaceDriftPainter oldDelegate) => true;
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = Size(constraints.maxWidth, constraints.maxHeight);
+
+        return GestureDetector(
+          onPanStart: (details) {
+            _autoRotationController.stop();
+            _lastPanOffset = details.localPosition;
+          },
+          onPanUpdate: (details) {
+            if (_lastPanOffset != null) {
+              setState(() {
+                // Adjust sensitivity
+                _rotationY += (details.localPosition.dx - _lastPanOffset!.dx) * 0.01;
+                _rotationX += (details.localPosition.dy - _lastPanOffset!.dy) * 0.01;
+                _lastPanOffset = details.localPosition;
+              });
+            }
+          },
+          onPanEnd: (_) {
+            _lastPanOffset = null;
+            _autoRotationController.repeat();
+          },
+          onTapUp: (details) => _handleTap(details, size),
+          child: Container(
+            color: Colors.transparent, // Ensure full area is tappable
+            child: AnimatedBuilder(
+              animation: _autoRotationController,
+              builder: (context, child) {
+                return CustomPaint(
+                  size: Size.infinite,
+                  painter: _SpherePainter(
+                    entries: widget.entries,
+                    rotationX: _rotationX,
+                    rotationY: _rotationY + (_autoRotationController.value * 2 * math.pi),
+                    sphereRadius: _sphereRadius,
+                    beadRadius: _beadRadius,
+                    totalBeads: _totalBeads,
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
-class _DustCloudSpec {
-  final Offset baseCenter;
-  final double radius;
-  final Color color;
-  final double speedX;
-  final double speedY;
+class _SpherePainter extends CustomPainter {
+  final List<MoodEntry> entries;
+  final double rotationX;
+  final double rotationY;
+  final double sphereRadius;
+  final double beadRadius;
+  final int totalBeads;
 
-  _DustCloudSpec({
-    required this.baseCenter,
-    required this.radius,
-    required this.color,
-    required this.speedX,
-    required this.speedY,
+  _SpherePainter({
+    required this.entries,
+    required this.rotationX,
+    required this.rotationY,
+    required this.sphereRadius,
+    required this.beadRadius,
+    required this.totalBeads,
+  });
+
+  // 3D Point projection helper
+  Offset _project(double x, double y, double z, double width, double height) {
+    double perspective = 500 / (500 + z);
+    return Offset(
+      (x * perspective) + width / 2,
+      (y * perspective) + height / 2,
+    );
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final now = DateTime.now();
+
+    // 1. Calculate and store all projected points with depth
+    List<_BeadProjected> projectedBeads = [];
+
+    for (int i = 0; i < totalBeads; i++) {
+      // Fibonacci spiral point distribution
+      double y = 1 - (i / (totalBeads - 1)) * 2;
+      double radiusAtY = math.sqrt(1 - y * y);
+      double theta = (math.pi * (1 + math.sqrt(5))) * i;
+      double x = math.cos(theta) * radiusAtY;
+      double z = math.sin(theta) * radiusAtY;
+
+      // Scale to sphere radius
+      x *= sphereRadius;
+      y *= sphereRadius;
+      z *= sphereRadius;
+
+      // 3D Rotations
+      // Y-axis
+      double nextX = x * math.cos(rotationY) + z * math.sin(rotationY);
+      double nextZ = -x * math.sin(rotationY) + z * math.cos(rotationY);
+      x = nextX;
+      z = nextZ;
+
+      // X-axis
+      double nextY = y * math.cos(rotationX) - z * math.sin(rotationX);
+      nextZ = y * math.sin(rotationX) + z * math.cos(rotationX);
+      y = nextY;
+      z = nextZ;
+
+      // Match entry (simple date fallback for demo)
+      final targetDate = now.subtract(Duration(days: i));
+      final MoodEntry? match = entries.where((e) {
+        return e.date.year == targetDate.year &&
+               e.date.month == targetDate.month &&
+               e.date.day == targetDate.day;
+      }).firstOrNull;
+
+      // Project
+      Offset projectedPoint = _project(x, y, z, size.width, size.height);
+      
+      projectedBeads.add(_BeadProjected(
+        point: projectedPoint,
+        depth: z, // Used for sorting and scaling
+        entry: match,
+      ));
+    }
+
+    // 2. Sort beads by depth ( Painter's Algorithm: back to front)
+    projectedBeads.sort((a, b) => b.depth.compareTo(a.depth));
+
+    // 3. Paint beads
+    final glassPaint = Paint()
+      ..color = Colors.white.withOpacity(0.15)
+      ..style = PaintingStyle.fill;
+
+    final glassBorderPaint = Paint()
+      ..color = Colors.white.withOpacity(0.3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.5;
+
+    for (var bead in projectedBeads) {
+      // Perspective scaling for radius
+      double perspectiveFactor = 500 / (500 + bead.depth);
+      double scaledRadius = beadRadius * perspectiveFactor;
+
+      // Transparency fades based on depth (distant = dimmer)
+      double depthOpacity = ((sphereRadius - bead.depth) / (2 * sphereRadius)).clamp(0.2, 1.0);
+
+      if (bead.entry != null) {
+        // Render Painted Orb glow core
+        final primaryColor = Color(bead.entry!.primaryColorValue);
+        
+        // Ambient glow
+        canvas.drawCircle(
+          bead.point,
+          scaledRadius * 1.8,
+          Paint()
+            ..color = primaryColor.withOpacity(0.3 * depthOpacity)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+        );
+
+        // Core color
+        canvas.drawCircle(
+          bead.point,
+          scaledRadius,
+          Paint()..color = primaryColor.withOpacity(depthOpacity),
+        );
+
+        // Glass border shine overlay
+        canvas.drawCircle(
+          bead.point,
+          scaledRadius,
+          glassBorderPaint..color = Colors.white.withOpacity(0.4 * depthOpacity),
+        );
+      } else {
+        // Render empty translucent glass bead
+        canvas.drawCircle(bead.point, scaledRadius, glassPaint..color = Colors.white.withOpacity(0.1 * depthOpacity));
+        canvas.drawCircle(bead.point, scaledRadius, glassBorderPaint..color = Colors.white.withOpacity(0.2 * depthOpacity));
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SpherePainter oldDelegate) {
+    return oldDelegate.rotationX != rotationX ||
+           oldDelegate.rotationY != rotationY ||
+           oldDelegate.entries != entries;
+  }
+}
+
+class _BeadProjected {
+  final Offset point;
+  final double depth;
+  final MoodEntry? entry;
+
+  _BeadProjected({
+    required this.point,
+    required this.depth,
+    this.entry,
   });
 }
