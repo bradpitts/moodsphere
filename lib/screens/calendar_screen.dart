@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/mood_entry.dart';
 import '../providers/mood_provider.dart';
 import '../widgets/entry_detail_sheet.dart';
-
+ 
 class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
 
