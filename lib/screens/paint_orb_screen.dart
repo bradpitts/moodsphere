@@ -157,7 +157,15 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
                       width: 240,
                       height: 240,
                       child: CustomPaint(
-                        painter: OrbPainter(baseColor: _selectedColor),
+                        painter: OrbPainter(
+                          strokes: [
+                            PaintStroke(
+                              points: const [Offset(120, 120)],
+                              color: _selectedColor,
+                              strokeWidth: 200,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),

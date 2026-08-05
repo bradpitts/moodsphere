@@ -34,7 +34,10 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
   late MoodPaletteItem _selectedMood;
   BrushTool _selectedTool = BrushTool.paintbrush;
   double _brushSize = 24.0;
-  final List<StrokePoint> _strokePoints = [];
+  final List<PaintStroke> _strokes = [];
+  PaintStroke? _currentStroke;
+  final List<String> _strokeMoodNames = [];
+  String? _currentMoodName;
   final Map<String, double> _moodPercentages = {};
 
   static const List<MoodPaletteItem> positivePalette = [
@@ -94,21 +97,40 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
   }
 
   void _recalculatePercentages() {
-    if (_strokePoints.isEmpty) {
+    final allStrokes = [..._strokes];
+    if (_currentStroke != null) allStrokes.add(_currentStroke!);
+
+    if (allStrokes.isEmpty) {
       _moodPercentages.clear();
       _moodPercentages[_selectedMood.name] = 100.0;
       return;
     }
 
     final counts = <String, int>{};
-    for (var pt in _strokePoints) {
-      counts[pt.moodName] = (counts[pt.moodName] ?? 0) + 1;
+    int totalPoints = 0;
+
+    for (int i = 0; i < _strokes.length; i++) {
+      final moodName = i < _strokeMoodNames.length ? _strokeMoodNames[i] : _selectedMood.name;
+      final ptsCount = _strokes[i].points.length;
+      counts[moodName] = (counts[moodName] ?? 0) + ptsCount;
+      totalPoints += ptsCount;
     }
 
-    final total = _strokePoints.length.toDouble();
+    if (_currentStroke != null && _currentMoodName != null) {
+      final ptsCount = _currentStroke!.points.length;
+      counts[_currentMoodName!] = (counts[_currentMoodName!] ?? 0) + ptsCount;
+      totalPoints += ptsCount;
+    }
+
+    if (totalPoints == 0) {
+      _moodPercentages.clear();
+      _moodPercentages[_selectedMood.name] = 100.0;
+      return;
+    }
+
     _moodPercentages.clear();
     counts.forEach((name, count) {
-      _moodPercentages[name] = ((count / total) * 100).roundToDouble();
+      _moodPercentages[name] = ((count / totalPoints.toDouble()) * 100).roundToDouble();
     });
   }
 
@@ -290,30 +312,51 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
 
         // Interactive Orb Finger Painting Canvas
         GestureDetector(
-          onPanUpdate: (details) {
+          onPanStart: (details) {
             final RenderBox renderBox = context.findRenderObject() as RenderBox;
             final localPos = renderBox.globalToLocal(details.globalPosition);
 
             setState(() {
-              _strokePoints.add(
-                StrokePoint(
-                  offset: localPos,
-                  color: _selectedMood.color,
-                  size: _brushSize,
-                  tool: _selectedTool,
-                  moodName: _selectedMood.name,
-                ),
+              _currentMoodName = _selectedMood.name;
+              _currentStroke = PaintStroke(
+                points: [localPos],
+                color: _selectedMood.color,
+                strokeWidth: _brushSize,
               );
               _recalculatePercentages();
             });
+          },
+          onPanUpdate: (details) {
+            final RenderBox renderBox = context.findRenderObject() as RenderBox;
+            final localPos = renderBox.globalToLocal(details.globalPosition);
+
+            if (_currentStroke != null) {
+              setState(() {
+                _currentStroke!.points.add(localPos);
+                _recalculatePercentages();
+              });
+            }
+          },
+          onPanEnd: (_) {
+            if (_currentStroke != null) {
+              setState(() {
+                _strokes.add(_currentStroke!);
+                if (_currentMoodName != null) {
+                  _strokeMoodNames.add(_currentMoodName!);
+                }
+                _currentStroke = null;
+                _currentMoodName = null;
+                _recalculatePercentages();
+              });
+            }
           },
           child: SizedBox(
             width: 250,
             height: 250,
             child: CustomPaint(
               painter: OrbPainter(
-                strokePoints: _strokePoints,
-                primaryColor: _selectedMood.color,
+                strokes: _strokes,
+                currentStroke: _currentStroke,
               ),
             ),
           ),

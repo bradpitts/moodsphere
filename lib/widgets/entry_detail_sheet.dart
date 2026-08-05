@@ -129,8 +129,13 @@ class EntryDetailSheet extends StatelessWidget {
                     height: 170,
                     child: CustomPaint(
                       painter: OrbPainter(
-                        strokePoints: const [],
-                        primaryColor: primaryColor,
+                        strokes: [
+                          PaintStroke(
+                            points: const [Offset(85, 85)],
+                            color: primaryColor,
+                            strokeWidth: 150,
+                          ),
+                        ],
                       ),
                     ),
                   ),

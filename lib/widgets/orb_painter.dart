@@ -1,126 +1,108 @@
-import 'dart:math' as math;
+import 'dart:ui';
 import 'package:flutter/material.dart';
 
-enum BrushTool { paintbrush, spray, marker }
-
-class StrokePoint {
-  final Offset offset;
+class PaintStroke {
+  final List<Offset> points;
   final Color color;
-  final double size;
-  final BrushTool tool;
-  final String moodName;
+  final double strokeWidth;
 
-  StrokePoint({
-    required this.offset,
+  PaintStroke({
+    required this.points,
     required this.color,
-    required this.size,
-    required this.tool,
-    required this.moodName,
+    this.strokeWidth = 36.0,
   });
 }
 
 class OrbPainter extends CustomPainter {
-  final List<StrokePoint> strokePoints;
-  final Color primaryColor;
+  final List<PaintStroke> strokes;
+  final PaintStroke? currentStroke;
 
   OrbPainter({
-    required this.strokePoints,
-    required this.primaryColor,
+    required this.strokes,
+    this.currentStroke,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2.2;
-    final sphereRect = Rect.fromCircle(center: center, radius: radius);
+    final radius = (size.width / 2) - 2;
+    final circleRect = Rect.fromCircle(center: center, radius: radius);
+    final circlePath = Path()..addOval(circleRect);
 
-    // 1. Outer Ambient Glow
-    final outerGlowColor = strokePoints.isNotEmpty ? primaryColor : const Color(0xFF4A90E2);
-    final outerGlowPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          outerGlowColor.withOpacity(0.35),
-          outerGlowColor.withOpacity(0.1),
-          Colors.transparent,
-        ],
-        stops: const [0.0, 0.65, 1.0],
-      ).createShader(Rect.fromCircle(center: center, radius: radius * 1.45))
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24.0);
-
-    canvas.drawCircle(center, radius * 1.45, outerGlowPaint);
-
-    // 2. Blank Canvas Start Inside Glass Circle (Subtle Glass Outline Ring Only)
-    canvas.save();
-    final clipPath = Path()..addOval(sphereRect);
-    canvas.clipPath(clipPath);
-
-    // 3. Soft Watercolor Bleeding via Offscreen saveLayer (BlendMode.srcOver)
-    canvas.saveLayer(Rect.largest, Paint()..blendMode = BlendMode.srcOver);
-
-    final stampPaint = Paint()
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 36.0);
-
-    if (strokePoints.isNotEmpty) {
-      for (var point in strokePoints) {
-        final stampRadius = point.size * 1.8;
-
-        stampPaint.shader = RadialGradient(
-          colors: [
-            point.color.withOpacity(0.85),
-            point.color.withOpacity(0.35),
-            Colors.transparent,
-          ],
-          stops: const [0.0, 0.55, 1.0],
-        ).createShader(Rect.fromCircle(center: point.offset, radius: stampRadius));
-
-        canvas.drawCircle(point.offset, stampRadius, stampPaint);
-      }
-    } else {
-      stampPaint.shader = RadialGradient(
-        colors: [
-          primaryColor.withOpacity(0.85),
-          primaryColor.withOpacity(0.35),
-          Colors.transparent,
-        ],
-        stops: const [0.0, 0.6, 1.0],
-      ).createShader(sphereRect);
-
-      canvas.drawCircle(center, radius * 0.9, stampPaint);
-    }
-
-    canvas.restore(); // Restore saveLayer
-
-    // 4. Embedded Specular Glass Core Shine
-    final highlightCenter = Offset(center.dx - radius * 0.32, center.dy - radius * 0.35);
-    final glassShinePaint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          Colors.white.withOpacity(0.55),
-          Colors.white.withOpacity(0.12),
-          Colors.transparent,
-        ],
-        stops: const [0.0, 0.45, 1.0],
-      ).createShader(Rect.fromCircle(center: highlightCenter, radius: radius * 0.42));
-
-    canvas.drawCircle(highlightCenter, radius * 0.4, glassShinePaint);
-
-    // 5. Glass Rim Line (1px)
+    // 1. Glass Rim Border
     final rimPaint = Paint()
+      ..color = Colors.white.withOpacity(0.25)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.white.withOpacity(0.5),
-          Colors.white.withOpacity(0.15),
-          Colors.white.withOpacity(0.05),
-        ],
-      ).createShader(sphereRect);
+      ..strokeWidth = 1.5;
 
     canvas.drawCircle(center, radius, rimPaint);
 
-    canvas.restore(); // Restore clipPath
+    // 2. Clip all paint strokes strictly inside the glass sphere
+    canvas.save();
+    canvas.clipPath(circlePath);
+
+    // Glass Interior Base (100% Blank Translucent Fill)
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()..color = Colors.white.withOpacity(0.04),
+    );
+
+    // 3. Render Watercolor Brush Strokes on Offscreen Layer
+    canvas.saveLayer(circleRect, Paint()..blendMode = BlendMode.srcOver);
+
+    final allStrokes = [...strokes];
+    if (currentStroke != null) allStrokes.add(currentStroke!);
+
+    for (var stroke in allStrokes) {
+      if (stroke.points.isEmpty) continue;
+
+      final strokePaint = Paint()
+        ..color = stroke.color.withOpacity(0.85)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke.strokeWidth
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18.0);
+
+      if (stroke.points.length == 1) {
+        // Draw single dab point
+        canvas.drawCircle(
+          stroke.points.first,
+          stroke.strokeWidth / 2,
+          Paint()
+            ..color = stroke.color.withOpacity(0.85)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18.0),
+        );
+      } else {
+        final path = Path();
+        path.moveTo(stroke.points.first.dx, stroke.points.first.dy);
+        for (int i = 1; i < stroke.points.length; i++) {
+          path.lineTo(stroke.points[i].dx, stroke.points[i].dy);
+        }
+        canvas.drawPath(path, strokePaint);
+      }
+    }
+
+    canvas.restore(); // Restore stroke blending layer
+
+    // 4. Glass Specular Reflection Highlight (Top Left 3D Shine)
+    final highlightPath = Path()
+      ..addOval(Rect.fromLTWH(
+        center.dx - radius * 0.5,
+        center.dy - radius * 0.65,
+        radius * 0.45,
+        radius * 0.25,
+      ));
+
+    canvas.drawPath(
+      highlightPath,
+      Paint()
+        ..color = Colors.white.withOpacity(0.25)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8.0),
+    );
+
+    canvas.restore(); // Restore clip
   }
 
   @override

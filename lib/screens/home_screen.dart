@@ -143,8 +143,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         height: 32,
                         child: CustomPaint(
                           painter: OrbPainter(
-                            strokePoints: const [],
-                            primaryColor: Color(todayEntry.primaryColorValue),
+                            strokes: [
+                              PaintStroke(
+                                points: const [Offset(16, 16)],
+                                color: Color(todayEntry.primaryColorValue),
+                                strokeWidth: 32,
+                              ),
+                            ],
                           ),
                         ),
                       ),
