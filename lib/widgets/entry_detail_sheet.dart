@@ -131,6 +131,7 @@ class EntryDetailSheet extends StatelessWidget {
                       painter: OrbPainter(
                         strokes: [],
                         moodPercentages: entry.moodPercentages,
+                        primaryColorValue: entry.primaryColorValue,
                       ),
                     ),
                   ),

@@ -20,24 +20,30 @@ class PaintStroke {
 class OrbPainter extends CustomPainter {
   final List<PaintStroke> strokes;
   final PaintStroke? currentStroke;
-  final Map<String, double>? moodPercentages; // Used for multi-color fallback on saved entries
+  final Map<String, double>? moodPercentages;
+  final int? primaryColorValue;
 
   OrbPainter({
     required this.strokes,
     this.currentStroke,
     this.moodPercentages,
+    this.primaryColorValue,
   });
 
-  static const Map<String, Color> moodColorMap = {
-    'Joy': Color(0xFFFFD700),
-    'Serenity': Color(0xFF4EECD5),
-    'Love': Color(0xFFFF5252),
-    'Longing': Color(0xFF448AFF),
-    'Sadness': Color(0xFF29B6F6),
-    'Anger': Color(0xFFFF3D00),
-    'Disgust': Color(0xFF66BB6A),
-    'Fear': Color(0xFFAB47BC),
-  };
+  static Color _getMoodColor(String key) {
+    final normalized = key.trim().toLowerCase();
+    switch (normalized) {
+      case 'joy': return const Color(0xFFFFD700);
+      case 'serenity': return const Color(0xFF4EECD5);
+      case 'love': return const Color(0xFFFF5252);
+      case 'longing': return const Color(0xFF448AFF);
+      case 'sadness': return const Color(0xFF29B6F6);
+      case 'anger': return const Color(0xFFFF3D00);
+      case 'disgust': return const Color(0xFF66BB6A);
+      case 'fear': return const Color(0xFFAB47BC);
+      default: return const Color(0xFFFFD700);
+    }
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -46,7 +52,7 @@ class OrbPainter extends CustomPainter {
     final circleRect = Rect.fromCircle(center: center, radius: radius);
     final circlePath = Path()..addOval(circleRect);
 
-    // 1. Glass Rim Outer Border
+    // 1. Glass Outer Rim
     final rimPaint = Paint()
       ..color = Colors.white.withOpacity(0.3)
       ..style = PaintingStyle.stroke
@@ -54,15 +60,15 @@ class OrbPainter extends CustomPainter {
 
     canvas.drawCircle(center, radius, rimPaint);
 
-    // 2. Clip all rendering inside glass sphere
+    // 2. Clip all rendering strictly inside glass sphere
     canvas.save();
     canvas.clipPath(circlePath);
 
-    // Glass Translucent Base
+    // Dark Translucent Glass Base
     canvas.drawCircle(
       center,
       radius,
-      Paint()..color = const Color(0xFF1A1A26),
+      Paint()..color = const Color(0xFF161622),
     );
 
     final allStrokes = [...strokes];
@@ -71,7 +77,7 @@ class OrbPainter extends CustomPainter {
     canvas.saveLayer(circleRect, Paint()..blendMode = BlendMode.srcOver);
 
     if (allStrokes.isNotEmpty) {
-      // MODE A: Render Freehand Touch Strokes
+      // TIER 1: Live Freehand Touch Painting
       for (var stroke in allStrokes) {
         if (stroke.points.isEmpty) continue;
 
@@ -108,17 +114,20 @@ class OrbPainter extends CustomPainter {
         }
       }
     } else if (moodPercentages != null && moodPercentages!.isNotEmpty) {
-      // MODE B: Render Multi-Color Blended Orb for Saved Entries
+      // TIER 2: Saved Entry Multi-Color Radial Blended Gradient
       List<Color> colors = [];
       moodPercentages!.forEach((key, val) {
         if (val > 0) {
-          colors.add(moodColorMap[key] ?? const Color(0xFFFFD700));
+          colors.add(_getMoodColor(key));
         }
       });
+
       if (colors.isEmpty) {
-        colors.add(const Color(0xFFFFD700));
+        final fallback = primaryColorValue != null ? Color(primaryColorValue!) : const Color(0xFFFFD700);
+        colors = [fallback, fallback];
+      } else if (colors.length == 1) {
+        colors.add(colors.first);
       }
-      if (colors.length == 1) colors.add(colors.first);
 
       final sweepGradient = SweepGradient(
         colors: colors,
@@ -130,13 +139,26 @@ class OrbPainter extends CustomPainter {
         radius,
         Paint()
           ..shader = sweepGradient.createShader(circleRect)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18.0),
+      );
+    } else {
+      // TIER 3: Safety Fallback using Primary Color
+      final fallbackColor = primaryColorValue != null 
+          ? Color(primaryColorValue!) 
+          : const Color(0xFFFFD700);
+
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..color = fallbackColor.withOpacity(0.85)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20.0),
       );
     }
 
     canvas.restore(); // Restore stroke layer
 
-    // 3. Glass Specular 3D Reflection
+    // 3. Glass Specular 3D Reflection Highlight
     final highlightPath = Path()
       ..addOval(Rect.fromLTWH(
         center.dx - radius * 0.45,
@@ -148,7 +170,7 @@ class OrbPainter extends CustomPainter {
     canvas.drawPath(
       highlightPath,
       Paint()
-        ..color = Colors.white.withOpacity(0.22)
+        ..color = Colors.white.withOpacity(0.25)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0),
     );
 
