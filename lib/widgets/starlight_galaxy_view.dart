@@ -2,6 +2,40 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../models/mood_entry.dart';
+import 'orb_painter.dart';
+
+Color _getEntryStarColor(MoodEntry entry) {
+  // 1. Try to compute from dominant mood percentage
+  if (entry.moodPercentages.isNotEmpty) {
+    String dominantMood = '';
+    double maxVal = -1;
+    entry.moodPercentages.forEach((key, val) {
+      if (val > maxVal) {
+        maxVal = val;
+        dominantMood = key;
+      }
+    });
+
+    if (dominantMood.isNotEmpty) {
+      return OrbPainter.getMoodColor(dominantMood);
+    }
+  }
+
+  // 2. Try to compute from primaryColorValue if not default yellow
+  if (entry.primaryColorValue != 0xFFFFD700 && entry.primaryColorValue != 0) {
+    return Color(entry.primaryColorValue);
+  }
+
+  // 3. Fallback check for strokes
+  if (entry.strokeData != null && entry.strokeData!.isNotEmpty) {
+    final strokes = OrbPainter.decodeStrokeData(entry.strokeData);
+    if (strokes.isNotEmpty && strokes.first.color != Colors.transparent) {
+      return strokes.first.color;
+    }
+  }
+
+  return Color(entry.primaryColorValue);
+}
 
 class StarlightGalaxyView extends StatefulWidget {
   final List<MoodEntry> entries;
@@ -152,54 +186,6 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
     required this.scale,
     required this.driftVal,
   });
-
-  Color _getEntryStarColor(MoodEntry entry) {
-    // 1. Try to compute mixed/blended color from actual drawn freehand strokes
-    if (entry.strokeData != null && entry.strokeData!.isNotEmpty) {
-      final strokes = OrbPainter.decodeStrokeData(entry.strokeData);
-      if (strokes.isNotEmpty) {
-        double totalR = 0, totalG = 0, totalB = 0, count = 0;
-        for (var stroke in strokes) {
-          final weight = math.max(1, stroke.points.length).toDouble();
-          totalR += stroke.color.red * weight;
-          totalG += stroke.color.green * weight;
-          totalB += stroke.color.blue * weight;
-          count += weight;
-        }
-        if (count > 0) {
-          return Color.fromRGBO(
-            (totalR / count).round().clamp(0, 255),
-            (totalG / count).round().clamp(0, 255),
-            (totalB / count).round().clamp(0, 255),
-            1.0,
-          );
-        }
-      }
-    }
-
-    // 2. Try to compute from dominant mood percentage
-    if (entry.moodPercentages.isNotEmpty) {
-      String dominantMood = '';
-      double maxVal = -1;
-      entry.moodPercentages.forEach((key, val) {
-        if (val > maxVal) {
-          maxVal = val;
-          dominantMood = key;
-        }
-      });
-
-      if (dominantMood.isNotEmpty) {
-        return OrbPainter.getMoodColor(dominantMood);
-      }
-    }
-
-    // 3. Try to compute from primaryColorValue if not default yellow
-    if (entry.primaryColorValue != 0xFFFFD700 && entry.primaryColorValue != 0) {
-      return Color(entry.primaryColorValue);
-    }
-
-    return Color(entry.primaryColorValue);
-  }
 
   @override
   void paint(Canvas canvas, Size size) {
