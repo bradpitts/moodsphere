@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../models/mood_entry.dart';
+import 'orb_painter.dart';
 
 class Native3DSphere extends StatefulWidget {
   final List<MoodEntry> entries;
@@ -64,7 +65,6 @@ class _Native3DSphereState extends State<Native3DSphere>
       final x0 = math.cos(theta) * radiusAtY;
       final z0 = math.sin(theta) * radiusAtY;
 
-      // Rotate around Pitch (X) and Yaw (Y)
       final x1 = x0;
       final y1 = y * math.cos(_pitch) - z0 * math.sin(_pitch);
       final z1 = y * math.sin(_pitch) + z0 * math.cos(_pitch);
@@ -73,12 +73,10 @@ class _Native3DSphereState extends State<Native3DSphere>
       final y2 = y1;
       final z2 = -x1 * math.sin(_yaw) + z1 * math.cos(_yaw);
 
-      // Project to 2D Screen
       final screenX = center.dx + x2 * radius;
       final screenY = center.dy + y2 * radius;
       final dist = (Offset(screenX, screenY) - details.localPosition).distance;
 
-      // Only hit beads facing forward (z2 > -0.2)
       if (z2 > -0.2 && dist < closestDistance && i < widget.entries.length) {
         closestDistance = dist;
         hitEntry = widget.entries[i];
@@ -149,7 +147,6 @@ class _SpherePainter extends CustomPainter {
     final totalBeads = 100;
     final goldenRatio = (1 + math.sqrt(5)) / 2;
 
-    // Draw central glowing wireframe core
     final wirePaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0
@@ -166,7 +163,6 @@ class _SpherePainter extends CustomPainter {
       final x0 = math.cos(theta) * radiusAtY;
       final z0 = math.sin(theta) * radiusAtY;
 
-      // 3D Matrix Rotations
       final x1 = x0;
       final y1 = y * math.cos(pitch) - z0 * math.sin(pitch);
       final z1 = y * math.sin(pitch) + z0 * math.cos(pitch);
@@ -186,7 +182,6 @@ class _SpherePainter extends CustomPainter {
       ));
     }
 
-    // Sort by Z depth for 3D painter ordering
     points.sort((a, b) => a.z.compareTo(b.z));
 
     for (var bead in points) {
@@ -199,22 +194,34 @@ class _SpherePainter extends CustomPainter {
 
       final Color baseColor;
       final double baseAlpha;
+      List<Color> gradientColors = [];
 
       if (bead.entry != null) {
         baseColor = Color(bead.entry!.primaryColorValue);
         baseAlpha = opacity;
+        if (bead.entry!.moodPercentages.isNotEmpty) {
+          bead.entry!.moodPercentages.forEach((key, val) {
+            if (val > 0) gradientColors.add(OrbPainter.getMoodColor(key));
+          });
+          if (gradientColors.length == 1) gradientColors.add(gradientColors.first);
+        }
       } else {
         baseColor = Colors.white;
         baseAlpha = opacity * 0.18;
       }
 
-      final beadPaint = Paint()
-        ..color = baseColor.withOpacity(baseAlpha)
-        ..style = PaintingStyle.fill;
+      final beadPaint = Paint()..style = PaintingStyle.fill;
+
+      if (gradientColors.isNotEmpty) {
+        final transparentColors = gradientColors.map((c) => c.withOpacity(baseAlpha)).toList();
+        beadPaint.shader = SweepGradient(colors: transparentColors)
+            .createShader(Rect.fromCircle(center: Offset(screenX, screenY), radius: beadRadius));
+      } else {
+        beadPaint.color = baseColor.withOpacity(baseAlpha);
+      }
 
       canvas.drawCircle(Offset(screenX, screenY), beadRadius, beadPaint);
 
-      // Glass specular highlight
       final highlightPaint = Paint()
         ..color = Colors.white.withOpacity(opacity * 0.4)
         ..style = PaintingStyle.fill;

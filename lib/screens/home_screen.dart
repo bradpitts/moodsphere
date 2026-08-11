@@ -4,6 +4,7 @@ import '../models/mood_entry.dart';
 import '../providers/mood_provider.dart';
 import '../widgets/starlight_galaxy_view.dart';
 import '../widgets/entry_detail_sheet.dart';
+import '../widgets/orb_painter.dart';
 import 'create_wizard_screen.dart';
 import 'calendar_screen.dart';
 import 'profile_screen.dart';
@@ -17,6 +18,17 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  Gradient? _getEntryGradient(MoodEntry? entry) {
+    if (entry == null || entry.moodPercentages.isEmpty) return null;
+    List<Color> colors = [];
+    entry.moodPercentages.forEach((key, val) {
+      if (val > 0) colors.add(OrbPainter.getMoodColor(key));
+    });
+    if (colors.isEmpty) return null;
+    if (colors.length == 1) colors.add(colors.first);
+    return SweepGradient(colors: colors);
+  }
+
   @override
   Widget build(BuildContext context) {
     final entries = ref.watch(moodEntriesProvider);
@@ -33,7 +45,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            // Permanent Universe / Constellation View Background
             Positioned.fill(
               child: StarlightGalaxyView(
                 entries: entries,
@@ -52,12 +63,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 },
               ),
             ),
-
-            // Header and Overlay UI Controls
             Positioned.fill(
               child: Column(
                 children: [
-                  // Title Header Row
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     child: Row(
@@ -117,14 +125,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ],
                     ),
                   ),
-
-                  // Top Week Ribbon
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: _buildWeekRibbon(entries),
                   ),
-
-                  // Today's Mood Percentage Chips
                   if (todayEntry != null && todayEntry.moodPercentages.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Padding(
@@ -155,8 +159,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ],
               ),
             ),
-
-            // Floating Action Button to Paint New Orb
             Positioned(
               bottom: 24,
               right: 20,
@@ -237,14 +239,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 height: 28,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: dayEntry != null
-                      ? Color(dayEntry.primaryColorValue)
-                      : Colors.transparent,
+                  gradient: _getEntryGradient(dayEntry),
+                  color: _getEntryGradient(dayEntry) == null
+                      ? (dayEntry != null ? Color(dayEntry.primaryColorValue) : Colors.transparent)
+                      : null,
                   border: Border.all(
                     color: isToday
                         ? const Color(0xFFFFD700)
                         : (dayEntry != null
-                            ? Color(dayEntry.primaryColorValue)
+                            ? Colors.white38
                             : Colors.white24),
                     width: isToday ? 2 : 1,
                   ),

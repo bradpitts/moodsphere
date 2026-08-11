@@ -4,39 +4,6 @@ import 'package:flutter/material.dart';
 import '../models/mood_entry.dart';
 import 'orb_painter.dart';
 
-Color _getEntryStarColor(MoodEntry entry) {
-  // 1. Try to compute from dominant mood percentage
-  if (entry.moodPercentages.isNotEmpty) {
-    String dominantMood = '';
-    double maxVal = -1;
-    entry.moodPercentages.forEach((key, val) {
-      if (val > maxVal) {
-        maxVal = val;
-        dominantMood = key;
-      }
-    });
-
-    if (dominantMood.isNotEmpty) {
-      return OrbPainter.getMoodColor(dominantMood);
-    }
-  }
-
-  // 2. Try to compute from primaryColorValue if not default yellow
-  if (entry.primaryColorValue != 0xFFFFD700 && entry.primaryColorValue != 0) {
-    return Color(entry.primaryColorValue);
-  }
-
-  // 3. Fallback check for strokes
-  if (entry.strokeData != null && entry.strokeData!.isNotEmpty) {
-    final strokes = OrbPainter.decodeStrokeData(entry.strokeData);
-    if (strokes.isNotEmpty && strokes.first.color != Colors.transparent) {
-      return strokes.first.color;
-    }
-  }
-
-  return Color(entry.primaryColorValue);
-}
-
 class StarlightGalaxyView extends StatefulWidget {
   final List<MoodEntry> entries;
   final ValueChanged<MoodEntry>? onStarTap;
@@ -65,7 +32,6 @@ class _StarlightGalaxyViewState extends State<StarlightGalaxyView>
   @override
   void initState() {
     super.initState();
-    // Continuous 60 FPS Space Drift Ticker Animation
     _spaceDriftController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 40),
@@ -101,7 +67,6 @@ class _StarlightGalaxyViewState extends State<StarlightGalaxyView>
       final x0 = math.cos(theta) * radiusAtY;
       final z0 = math.sin(theta) * radiusAtY;
 
-      // 3D Matrix Rotations
       final x1 = x0;
       final y1 = y * math.cos(pitch) - z0 * math.sin(pitch);
       final z1 = y * math.sin(pitch) + z0 * math.cos(pitch);
@@ -192,23 +157,18 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = math.min(size.width, size.height) / 2.5 * scale;
 
-    // 1. Render 5 Parallax Nebula Dust Clouds Drifting & Looping Across Screen Boundaries
     _drawParallaxDustClouds(canvas, size);
 
-    // 2. Render 220 Background Stars Scattered Uniformly Across Vast 3D Volume [-600, 600]
     final starRandom = math.Random(101);
     final driftOffsetZ = (driftVal * 300) % 600;
 
     for (int i = 0; i < 220; i++) {
-      // Uniform 3D Cartesian coordinates in [-600, 600]
       final rawX = (starRandom.nextDouble() - 0.5) * 1200;
       final rawY = (starRandom.nextDouble() - 0.5) * 1200;
       final rawZ = (starRandom.nextDouble() - 0.5) * 1200 + driftOffsetZ;
 
-      // Wrap Z depth seamlessly
       final wrappedZ = ((rawZ + 600) % 1200) - 600;
 
-      // 3D Matrix Yaw/Pitch rotation
       final rotX = rawX * math.cos(yaw) - wrappedZ * math.sin(yaw);
       final rotZ = rawX * math.sin(yaw) + wrappedZ * math.cos(yaw);
       final rotY = rawY * math.cos(pitch) - rotZ * math.sin(pitch);
@@ -229,10 +189,7 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
 
     if (entries.isEmpty) return;
 
-    // 3. Project Mood Entries into 3D Independent Celestial Stars (No Lines)
     final starPoints = <Offset>[];
-    final starColors = <Color>[];
-
     final goldenRatio = (1 + math.sqrt(5)) / 2;
 
     for (int i = 0; i < entries.length; i++) {
@@ -244,7 +201,6 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
       final x0 = math.cos(theta) * radiusAtY;
       final z0 = math.sin(theta) * radiusAtY;
 
-      // 3D Matrix Rotations
       final x1 = x0;
       final y1 = y * math.cos(pitch) - z0 * math.sin(pitch);
       final z1 = y * math.sin(pitch) + z0 * math.cos(pitch);
@@ -254,33 +210,51 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
 
       final screenPos = Offset(center.dx + x2 * radius, center.dy + y2 * radius);
       starPoints.add(screenPos);
-      starColors.add(_getEntryStarColor(entry));
     }
 
-    // 4. Render Mood Stars with Multi-Layered Radial Light Halos
     for (int i = 0; i < starPoints.length; i++) {
       final pos = starPoints[i];
-      final primaryColor = starColors[i];
+      final entry = entries[i];
 
-      // Outer ambient atmospheric glow halo
+      List<Color> colors = [];
+      if (entry.moodPercentages.isNotEmpty) {
+        entry.moodPercentages.forEach((key, val) {
+          if (val > 0) colors.add(OrbPainter.getMoodColor(key));
+        });
+      }
+      
+      if (colors.isEmpty) {
+        if (entry.strokeData != null && entry.strokeData!.isNotEmpty) {
+          final strokes = OrbPainter.decodeStrokeData(entry.strokeData);
+          if (strokes.isNotEmpty && strokes.first.color != Colors.transparent) {
+            colors = [strokes.first.color, strokes.first.color];
+          }
+        }
+        if (colors.isEmpty) {
+          final fallback = entry.primaryColorValue != 0 ? Color(entry.primaryColorValue) : const Color(0xFFFFD700);
+          colors = [fallback, fallback];
+        }
+      } else if (colors.length == 1) {
+        colors.add(colors.first);
+      }
+
       canvas.drawCircle(
         pos,
         28.0,
         Paint()
-          ..color = primaryColor.withOpacity(0.5)
+          ..color = colors.first.withOpacity(0.5)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14),
       );
 
-      // Inner color core
+      final sweep = SweepGradient(colors: colors).createShader(Rect.fromCircle(center: pos, radius: 14.0));
       canvas.drawCircle(
         pos,
         14.0,
         Paint()
-          ..color = primaryColor.withOpacity(0.85)
+          ..shader = sweep
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
       );
 
-      // Bright central hot spot
       canvas.drawCircle(
         pos,
         6.0,
@@ -290,9 +264,7 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
   }
 
   void _drawParallaxDustClouds(Canvas canvas, Size size) {
-    // 5 Parallax Nebula Dust Cloud Layers drifting at varied speeds across screen boundaries
     final clouds = [
-      // Cosmic Purple #2A004F
       _DustCloudSpec(
         baseCenter: Offset(size.width * 0.2, size.height * 0.3),
         radius: size.width * 0.7,
@@ -300,7 +272,6 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
         speedX: 0.25,
         speedY: 0.1,
       ),
-      // Deep Teal #002A38
       _DustCloudSpec(
         baseCenter: Offset(size.width * 0.75, size.height * 0.65),
         radius: size.width * 0.8,
@@ -308,7 +279,6 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
         speedX: -0.3,
         speedY: 0.15,
       ),
-      // Magenta #3B0029
       _DustCloudSpec(
         baseCenter: Offset(size.width * 0.4, size.height * 0.8),
         radius: size.width * 0.65,
@@ -316,7 +286,6 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
         speedX: 0.35,
         speedY: -0.2,
       ),
-      // Indigo Nebula
       _DustCloudSpec(
         baseCenter: Offset(size.width * 0.85, size.height * 0.25),
         radius: size.width * 0.6,
@@ -327,7 +296,6 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
     ];
 
     for (var cloud in clouds) {
-      // Parallax drifting & looping offset math
       final offsetX = (driftVal * size.width * cloud.speedX) % (size.width * 1.4);
       final offsetY = (driftVal * size.height * cloud.speedY) % (size.height * 1.4);
 
