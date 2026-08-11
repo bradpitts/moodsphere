@@ -89,6 +89,7 @@ class OrbPainter extends CustomPainter {
     }
   }
 
+  static Color getMoodColor(String key) => _getMoodColor(key);
   static int getMoodColorValue(String key) => _getMoodColor(key).value;
 
   @override

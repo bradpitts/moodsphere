@@ -153,6 +153,54 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
     required this.driftVal,
   });
 
+  Color _getEntryStarColor(MoodEntry entry) {
+    // 1. Try to compute mixed/blended color from actual drawn freehand strokes
+    if (entry.strokeData != null && entry.strokeData!.isNotEmpty) {
+      final strokes = OrbPainter.decodeStrokeData(entry.strokeData);
+      if (strokes.isNotEmpty) {
+        double totalR = 0, totalG = 0, totalB = 0, count = 0;
+        for (var stroke in strokes) {
+          final weight = math.max(1, stroke.points.length).toDouble();
+          totalR += stroke.color.red * weight;
+          totalG += stroke.color.green * weight;
+          totalB += stroke.color.blue * weight;
+          count += weight;
+        }
+        if (count > 0) {
+          return Color.fromRGBO(
+            (totalR / count).round().clamp(0, 255),
+            (totalG / count).round().clamp(0, 255),
+            (totalB / count).round().clamp(0, 255),
+            1.0,
+          );
+        }
+      }
+    }
+
+    // 2. Try to compute from dominant mood percentage
+    if (entry.moodPercentages.isNotEmpty) {
+      String dominantMood = '';
+      double maxVal = -1;
+      entry.moodPercentages.forEach((key, val) {
+        if (val > maxVal) {
+          maxVal = val;
+          dominantMood = key;
+        }
+      });
+
+      if (dominantMood.isNotEmpty) {
+        return OrbPainter.getMoodColor(dominantMood);
+      }
+    }
+
+    // 3. Try to compute from primaryColorValue if not default yellow
+    if (entry.primaryColorValue != 0xFFFFD700 && entry.primaryColorValue != 0) {
+      return Color(entry.primaryColorValue);
+    }
+
+    return Color(entry.primaryColorValue);
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
@@ -220,7 +268,7 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
 
       final screenPos = Offset(center.dx + x2 * radius, center.dy + y2 * radius);
       starPoints.add(screenPos);
-      starColors.add(Color(entry.primaryColorValue));
+      starColors.add(_getEntryStarColor(entry));
     }
 
     // 4. Render Mood Stars with Multi-Layered Radial Light Halos

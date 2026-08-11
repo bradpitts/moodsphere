@@ -164,7 +164,24 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
     await _flyAnimationController.forward();
 
     int calculatedPrimaryColor = 0xFFFFD700;
-    if (_moodPercentages.isNotEmpty) {
+    if (_strokes.isNotEmpty) {
+      double totalR = 0, totalG = 0, totalB = 0, count = 0;
+      for (var stroke in _strokes) {
+        final weight = math.max(1, stroke.points.length).toDouble();
+        totalR += stroke.color.red * weight;
+        totalG += stroke.color.green * weight;
+        totalB += stroke.color.blue * weight;
+        count += weight;
+      }
+      if (count > 0) {
+        calculatedPrimaryColor = Color.fromRGBO(
+          (totalR / count).round().clamp(0, 255),
+          (totalG / count).round().clamp(0, 255),
+          (totalB / count).round().clamp(0, 255),
+          1.0,
+        ).value;
+      }
+    } else if (_moodPercentages.isNotEmpty) {
       double maxVal = -1;
       String dominantMood = _moodPercentages.keys.first;
 
