@@ -40,11 +40,15 @@ class _Galaxy3DViewState extends State<Galaxy3DView> {
       )
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageFinished: (String url) {
-            setState(() {
-              _isLoaded = true;
-            });
-            _updateBeadsInWebView();
+          onPageFinished: (String url) async {
+            // Delay to resolve WebGL canvas JS initialization race condition
+            await Future.delayed(const Duration(milliseconds: 500));
+            if (mounted) {
+              setState(() {
+                _isLoaded = true;
+              });
+              _updateBeadsInWebView();
+            }
           },
         ),
       )

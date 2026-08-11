@@ -55,13 +55,29 @@ class MoodSphereApp extends StatefulWidget {
   State<MoodSphereApp> createState() => _MoodSphereAppState();
 }
 
-class _MoodSphereAppState extends State<MoodSphereApp> {
+class _MoodSphereAppState extends State<MoodSphereApp> with WidgetsBindingObserver {
   late bool _unlocked;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _unlocked = !widget.isLocked;
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused && widget.isLocked) {
+      setState(() {
+        _unlocked = false;
+      });
+    }
   }
 
   @override

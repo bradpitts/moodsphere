@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../models/mood_entry.dart';
 import '../providers/mood_provider.dart';
@@ -163,6 +164,15 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
 
     await _flyAnimationController.forward();
 
+    // Copy photos to permanent document directory
+    List<String> permanentPaths = [];
+    final docDir = await getApplicationDocumentsDirectory();
+    for (String tempPath in _photoPaths) {
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${tempPath.split('/').last}';
+      final savedFile = await File(tempPath).copy('${docDir.path}/$fileName');
+      permanentPaths.add(savedFile.path);
+    }
+
     int calculatedPrimaryColor = 0xFFFFD700;
     if (_moodPercentages.isNotEmpty) {
       double maxVal = -1;
@@ -189,7 +199,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
       moodPercentages: Map.from(_moodPercentages),
       stateTags: const [], // Default empty state tags for 3-step wizard
       note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
-      photoPaths: _photoPaths.isEmpty ? null : List.from(_photoPaths),
+      photoPaths: permanentPaths.isEmpty ? null : List.from(permanentPaths),
       strokeData: strokeJson,
     );
 
@@ -255,7 +265,6 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
     );
   }
 
-  // --- STEP 1 OF 3: PAINT CANVAS & DUAL ARC PALETTE ---
   Widget _buildStep1PaintCanvas(BuildContext context) {
     final activePalette =
         _isPositivePalette ? positivePalette : negativePalette;
@@ -263,8 +272,6 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
     return Column(
       children: [
         const SizedBox(height: 12),
-
-        // Positive / Negative Toggle Pills
         Container(
           height: 38,
           padding: const EdgeInsets.all(3),
@@ -328,14 +335,10 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
             ],
           ),
         ),
-
         const Spacer(),
-
-        // Interactive Orb Finger Painting Canvas
         GestureDetector(
           onPanStart: (details) {
             final localPos = details.localPosition;
-
             setState(() {
               _currentMoodName = _selectedMood.name;
               _currentStroke = PaintStroke(
@@ -349,7 +352,6 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
           },
           onPanUpdate: (details) {
             final localPos = details.localPosition;
-
             if (_currentStroke != null) {
               setState(() {
                 _currentStroke!.points.add(localPos);
@@ -382,10 +384,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
             ),
           ),
         ),
-
         const Spacer(),
-
-        // Realtime Mood Percentage Curved Arc Bar
         SizedBox(
           height: 50,
           child: ListView(
@@ -439,10 +438,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
             }).toList(),
           ),
         ),
-
         const SizedBox(height: 14),
-
-        // Bottom Controls: Brush Drawer Popup & Next Button ("Next: Attachments")
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           child: Row(
@@ -559,7 +555,6 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
     );
   }
 
-  // --- STEP 2 OF 3: MEDIA ATTACHMENTS ---
   Widget _buildStep2MediaAttachments(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -579,9 +574,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
             'Add memories from today to embed alongside your mood orb.',
             style: GoogleFonts.inter(color: Colors.white54, fontSize: 13),
           ),
-
           const SizedBox(height: 24),
-
           Expanded(
             child: GridView.builder(
               physics: const BouncingScrollPhysics(),
@@ -649,7 +642,6 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
               },
             ),
           ),
-
           SizedBox(
             width: double.infinity,
             height: 50,
@@ -676,7 +668,6 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
     );
   }
 
-  // --- STEP 3 OF 3: DIARY REFLECTION NOTE & SAVE ---
   Widget _buildStep3DiaryNote(BuildContext context) {
     return ScaleTransition(
       scale: _flyScaleAnimation,
@@ -698,10 +689,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
               'Write your thoughts and reflections for today.',
               style: GoogleFonts.inter(color: Colors.white54, fontSize: 13),
             ),
-
             const SizedBox(height: 20),
-
-            // Lined Paper Style Journal Card
             Expanded(
               child: Container(
                 padding: const EdgeInsets.all(16),
@@ -733,9 +721,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
                 ),
               ),
             ),
-
             const SizedBox(height: 24),
-
             SizedBox(
               width: double.infinity,
               height: 52,

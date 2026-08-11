@@ -123,10 +123,43 @@ class OrbPainter extends CustomPainter {
     }
     if (currentStroke != null) renderStrokes.add(currentStroke!);
 
-    canvas.saveLayer(circleRect, Paint()..blendMode = BlendMode.srcOver);
+    // Layer 1: Mood Percentage Background Gradient 
+    if (!isInteractiveWizard && moodPercentages != null && moodPercentages!.isNotEmpty) {
+      List<Color> colors = [];
+      moodPercentages!.forEach((key, val) {
+        if (val > 0) colors.add(_getMoodColor(key));
+      });
 
+      if (colors.isEmpty) {
+        final fallback = primaryColorValue != null ? Color(primaryColorValue!) : const Color(0xFFFFD700);
+        colors = [fallback, fallback];
+      } else if (colors.length == 1) {
+        colors.add(colors.first);
+      }
+
+      final sweepGradient = SweepGradient(colors: colors, center: Alignment.center);
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..shader = sweepGradient.createShader(circleRect)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18.0),
+      );
+    } else if (!isInteractiveWizard && renderStrokes.isEmpty) {
+      // Safety Fallback (ONLY for saved entries with no strokes and no percentages)
+      final fallbackColor = primaryColorValue != null ? Color(primaryColorValue!) : const Color(0xFFFFD700);
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..color = fallbackColor.withOpacity(0.85)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20.0),
+      );
+    }
+
+    // Layer 2: Freehand Touch Strokes (Painted over the background)
+    canvas.saveLayer(circleRect, Paint()..blendMode = BlendMode.srcOver);
     if (renderStrokes.isNotEmpty) {
-      // Freehand Touch Strokes
       for (var stroke in renderStrokes) {
         if (stroke.points.isEmpty) continue;
 
@@ -162,40 +195,7 @@ class OrbPainter extends CustomPainter {
           canvas.drawPath(path, strokePaint);
         }
       }
-    } else if (!isInteractiveWizard && moodPercentages != null && moodPercentages!.isNotEmpty) {
-      // Saved Entry Multi-Color Radial Blended Gradient (ONLY for saved entries, NOT wizard)
-      List<Color> colors = [];
-      moodPercentages!.forEach((key, val) {
-        if (val > 0) colors.add(_getMoodColor(key));
-      });
-
-      if (colors.isEmpty) {
-        final fallback = primaryColorValue != null ? Color(primaryColorValue!) : const Color(0xFFFFD700);
-        colors = [fallback, fallback];
-      } else if (colors.length == 1) {
-        colors.add(colors.first);
-      }
-
-      final sweepGradient = SweepGradient(colors: colors, center: Alignment.center);
-      canvas.drawCircle(
-        center,
-        radius,
-        Paint()
-          ..shader = sweepGradient.createShader(circleRect)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18.0),
-      );
-    } else if (!isInteractiveWizard) {
-      // Safety Fallback (ONLY for saved entries)
-      final fallbackColor = primaryColorValue != null ? Color(primaryColorValue!) : const Color(0xFFFFD700);
-      canvas.drawCircle(
-        center,
-        radius,
-        Paint()
-          ..color = fallbackColor.withOpacity(0.85)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20.0),
-      );
     }
-
     canvas.restore(); // Restore stroke layer
 
     // Glass Specular 3D Reflection

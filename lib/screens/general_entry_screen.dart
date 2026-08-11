@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../models/general_entry.dart';
 import '../providers/general_entry_provider.dart';
@@ -64,12 +65,20 @@ class _GeneralEntryScreenState extends ConsumerState<GeneralEntryScreen> {
       _isSaving = true;
     });
 
+    String? permanentPath;
+    if (_selectedPhotoPath != null) {
+       final docDir = await getApplicationDocumentsDirectory();
+       final fileName = '${DateTime.now().millisecondsSinceEpoch}_${_selectedPhotoPath!.split('/').last}';
+       final savedFile = await File(_selectedPhotoPath!).copy('${docDir.path}/$fileName');
+       permanentPath = savedFile.path;
+    }
+
     final newEntry = GeneralEntry(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       date: DateTime.now(),
       title: _titleController.text.trim(),
       content: _contentController.text.trim(),
-      photoPath: _selectedPhotoPath,
+      photoPath: permanentPath,
     );
 
     await ref
@@ -139,9 +148,7 @@ class _GeneralEntryScreenState extends ConsumerState<GeneralEntryScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 20),
-
               Text(
                 'JOURNAL THOUGHTS',
                 style: GoogleFonts.inter(
@@ -169,10 +176,7 @@ class _GeneralEntryScreenState extends ConsumerState<GeneralEntryScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 20),
-
-              // Attachment
               Row(
                 children: [
                   Expanded(
@@ -215,9 +219,7 @@ class _GeneralEntryScreenState extends ConsumerState<GeneralEntryScreen> {
                   ],
                 ],
               ),
-
               const SizedBox(height: 36),
-
               SizedBox(
                 width: double.infinity,
                 height: 52,

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../models/mood_color_preset.dart';
 import '../models/mood_entry.dart';
@@ -93,10 +94,16 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
       _isSaving = true;
     });
 
-    // 1. Play Spring Save & Fly Animation
     await _flyAnimationController.forward();
 
-    // 2. Write to Hive via Riverpod
+    String? permanentPath;
+    if (_selectedPhotoPath != null) {
+       final docDir = await getApplicationDocumentsDirectory();
+       final fileName = '${DateTime.now().millisecondsSinceEpoch}_${_selectedPhotoPath!.split('/').last}';
+       final savedFile = await File(_selectedPhotoPath!).copy('${docDir.path}/$fileName');
+       permanentPath = savedFile.path;
+    }
+
     final newEntry = MoodEntry(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       date: DateTime.now(),
@@ -104,12 +111,11 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
       note: _noteController.text.trim().isEmpty
           ? null
           : _noteController.text.trim(),
-      photoPath: _selectedPhotoPath,
+      photoPath: permanentPath,
     );
 
     await ref.read(moodNotifierProvider.notifier).addEntry(newEntry);
 
-    // 3. Navigate back to Home Galaxy Sphere
     if (mounted) {
       Navigator.of(context).pop();
     }
@@ -146,8 +152,6 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 12),
-
-              // Animated Interactive Canvas Orb (with Save & Fly transition)
               SlideTransition(
                 position: _flySlideAnimation,
                 child: ScaleTransition(
@@ -174,10 +178,7 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
                     duration: 600.ms,
                     curve: Curves.easeOutBack,
                   ),
-
               const SizedBox(height: 32),
-
-              // Color Preset Selector Title
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -190,10 +191,7 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
                   ),
                 ),
               ),
-
               const SizedBox(height: 14),
-
-              // Horizontal list of color presets
               SizedBox(
                 height: 70,
                 child: ListView.separated(
@@ -260,10 +258,7 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
                   },
                 ),
               ),
-
               const SizedBox(height: 28),
-
-              // Optional Note Input
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -276,9 +271,7 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
                   ),
                 ),
               ),
-
               const SizedBox(height: 10),
-
               TextField(
                 controller: _noteController,
                 maxLines: 3,
@@ -308,10 +301,7 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
                   ),
                 ),
               ),
-
               const SizedBox(height: 24),
-
-              // Photo Picker Button / Preview
               Row(
                 children: [
                   Expanded(
@@ -379,10 +369,7 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
                   ],
                 ],
               ),
-
               const SizedBox(height: 36),
-
-              // Save & Fly Button
               SizedBox(
                 width: double.infinity,
                 height: 54,
@@ -416,7 +403,6 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
                         ),
                 ),
               ),
-
               const SizedBox(height: 24),
             ],
           ),
