@@ -43,6 +43,7 @@ class OrbPainter extends CustomPainter {
   final Map<String, double>? moodPercentages;
   final int? primaryColorValue;
   final String? serializedStrokeData;
+  final bool isInteractiveWizard; // Explicit flag for creation canvas
 
   OrbPainter({
     required this.strokes,
@@ -50,6 +51,7 @@ class OrbPainter extends CustomPainter {
     this.moodPercentages,
     this.primaryColorValue,
     this.serializedStrokeData,
+    this.isInteractiveWizard = false,
   });
 
   static List<PaintStroke> decodeStrokeData(String? jsonString) {
@@ -65,27 +67,22 @@ class OrbPainter extends CustomPainter {
   static Color _getMoodColor(String key) {
     final normalized = key.trim().toLowerCase();
     switch (normalized) {
-      // Positive Moods
-      case 'joy': return const Color(0xFFFFD700); // Yellow
-      case 'serenity': return const Color(0xFF4EECD5); // Cyan / Mint
-      case 'love': return const Color(0xFFFF5252); // Red / Pink
-      case 'longing': return const Color(0xFF448AFF); // Blue
-      case 'confidence': return const Color(0xFFAB47BC); // Purple / Violet
-      case 'peace': return const Color(0xFF81C784); // Soft Green
-      case 'hope': return const Color(0xFFFFB74D); // Amber / Orange
-      case 'gratitude': return const Color(0xFFFF80AB); // Deep Pink
-
-      // Negative Moods
-      case 'sadness': return const Color(0xFF29B6F6); // Light Blue
-      case 'anger': return const Color(0xFFFF3D00); // Dark Red / Orange
-      case 'disgust': return const Color(0xFF66BB6A); // Green
-      case 'fear': return const Color(0xFF7E57C2); // Deep Purple
-      case 'anxiety': return const Color(0xFFFF7043); // Coral / Orange
-      case 'guilt': return const Color(0xFF78909C); // Slate / Grey
-      case 'frustration': return const Color(0xFFEC407A); // Magenta
-
+      case 'joy': return const Color(0xFFFFD700);
+      case 'serenity': return const Color(0xFF4EECD5);
+      case 'love': return const Color(0xFFFF5252);
+      case 'longing': return const Color(0xFF448AFF);
+      case 'confidence': return const Color(0xFFAB47BC);
+      case 'peace': return const Color(0xFF81C784);
+      case 'hope': return const Color(0xFFFFB74D);
+      case 'gratitude': return const Color(0xFFFF80AB);
+      case 'sadness': return const Color(0xFF29B6F6);
+      case 'anger': return const Color(0xFFFF3D00);
+      case 'disgust': return const Color(0xFF66BB6A);
+      case 'fear': return const Color(0xFF7E57C2);
+      case 'anxiety': return const Color(0xFFFF7043);
+      case 'guilt': return const Color(0xFF78909C);
+      case 'frustration': return const Color(0xFFEC407A);
       default:
-        // Deterministic fallback color based on string hash so unknown custom moods get a unique color
         final int hash = normalized.hashCode;
         final double hue = (hash.abs() % 360).toDouble();
         return HSVColor.fromAHSV(1.0, hue, 0.75, 0.95).toColor();
@@ -101,7 +98,7 @@ class OrbPainter extends CustomPainter {
     final circleRect = Rect.fromCircle(center: center, radius: radius);
     final circlePath = Path()..addOval(circleRect);
 
-    // Glass Rim Outer Border
+    // Glass Outer Rim
     final rimPaint = Paint()
       ..color = Colors.white.withOpacity(0.3)
       ..style = PaintingStyle.stroke
@@ -109,11 +106,10 @@ class OrbPainter extends CustomPainter {
 
     canvas.drawCircle(center, radius, rimPaint);
 
-    // Clip rendering inside glass sphere
     canvas.save();
     canvas.clipPath(circlePath);
 
-    // Dark Translucent Glass Base Fill
+    // Dark Translucent Glass Base
     canvas.drawCircle(
       center,
       radius,
@@ -121,7 +117,7 @@ class OrbPainter extends CustomPainter {
     );
 
     List<PaintStroke> renderStrokes = [...strokes];
-    if (renderStrokes.isEmpty && serializedStrokeData != null) {
+    if (renderStrokes.isEmpty && serializedStrokeData != null && !isInteractiveWizard) {
       renderStrokes = decodeStrokeData(serializedStrokeData);
     }
     if (currentStroke != null) renderStrokes.add(currentStroke!);
@@ -129,7 +125,7 @@ class OrbPainter extends CustomPainter {
     canvas.saveLayer(circleRect, Paint()..blendMode = BlendMode.srcOver);
 
     if (renderStrokes.isNotEmpty) {
-      // TIER 1: Render Saved or Live Freehand Touch Strokes
+      // Freehand Touch Strokes
       for (var stroke in renderStrokes) {
         if (stroke.points.isEmpty) continue;
 
@@ -165,8 +161,8 @@ class OrbPainter extends CustomPainter {
           canvas.drawPath(path, strokePaint);
         }
       }
-    } else if (moodPercentages != null && moodPercentages!.isNotEmpty) {
-      // TIER 2: Fallback Multi-Color Gradient Sweep
+    } else if (!isInteractiveWizard && moodPercentages != null && moodPercentages!.isNotEmpty) {
+      // Saved Entry Multi-Color Radial Blended Gradient (ONLY for saved entries, NOT wizard)
       List<Color> colors = [];
       moodPercentages!.forEach((key, val) {
         if (val > 0) colors.add(_getMoodColor(key));
@@ -187,8 +183,8 @@ class OrbPainter extends CustomPainter {
           ..shader = sweepGradient.createShader(circleRect)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18.0),
       );
-    } else {
-      // TIER 3: Primary Color Safety Fallback
+    } else if (!isInteractiveWizard) {
+      // Safety Fallback (ONLY for saved entries)
       final fallbackColor = primaryColorValue != null ? Color(primaryColorValue!) : const Color(0xFFFFD700);
       canvas.drawCircle(
         center,

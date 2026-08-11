@@ -377,6 +377,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
               painter: OrbPainter(
                 strokes: _strokes,
                 currentStroke: _currentStroke,
+                isInteractiveWizard: true,
               ),
             ),
           ),
