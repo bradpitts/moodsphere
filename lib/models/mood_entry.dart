@@ -25,6 +25,9 @@ class MoodEntry extends HiveObject {
   @HiveField(6)
   final List<String>? _stateTags;
 
+  @HiveField(7)
+  final String? strokeData;
+
   MoodEntry({
     required this.id,
     required this.date,
@@ -34,19 +37,17 @@ class MoodEntry extends HiveObject {
     int? primaryColorValue,
     int? colorValue,
     List<String>? stateTags,
+    this.strokeData,
   })  : _moodPercentages = moodPercentages,
         _photoPaths = photoPaths,
         _primaryColorValue = primaryColorValue ?? colorValue,
         _stateTags = stateTags;
 
-  // Guarantees a non-zero, non-transparent fallback color
   int get primaryColorValue => (_primaryColorValue != null && _primaryColorValue! != 0) 
       ? _primaryColorValue! 
       : 0xFFFFD700;
-
   int get colorValue => primaryColorValue;
 
-  // Robust dynamic-to-typed Map casting for Hive storage
   Map<String, double> get moodPercentages {
     if (_moodPercentages == null) return {};
     final Map<String, double> result = {};
@@ -59,6 +60,7 @@ class MoodEntry extends HiveObject {
   }
 
   List<String> get stateTags => _stateTags ?? [];
+
   List<String> get safePhotoPaths => _photoPaths ?? [];
   List<String>? get photoPaths => _photoPaths;
   String? get photoPath => safePhotoPaths.isNotEmpty ? safePhotoPaths.first : null;

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -162,6 +163,10 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
 
     await _flyAnimationController.forward();
 
+    final strokeJson = _strokes.isNotEmpty
+        ? jsonEncode(_strokes.map((s) => s.toJson()).toList())
+        : null;
+
     final newEntry = MoodEntry(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       date: DateTime.now(),
@@ -170,6 +175,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
       stateTags: const [], // Default empty state tags for 3-step wizard
       note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
       photoPaths: _photoPaths.isEmpty ? null : List.from(_photoPaths),
+      strokeData: strokeJson,
     );
 
     await ref.read(moodNotifierProvider.notifier).addEntry(newEntry);

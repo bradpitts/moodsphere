@@ -130,6 +130,7 @@ class EntryDetailSheet extends StatelessWidget {
                     child: CustomPaint(
                       painter: OrbPainter(
                         strokes: [],
+                        serializedStrokeData: entry.strokeData,
                         moodPercentages: entry.moodPercentages,
                         primaryColorValue: entry.primaryColorValue,
                       ),

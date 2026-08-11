@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
@@ -15,6 +16,25 @@ class PaintStroke {
     this.strokeWidth = 32.0,
     this.tool = BrushTool.paintbrush,
   });
+
+  Map<String, dynamic> toJson() => {
+    'points': points.map((p) => {'x': p.dx, 'y': p.dy}).toList(),
+    'color': color.value,
+    'strokeWidth': strokeWidth,
+    'tool': tool.index,
+  };
+
+  factory PaintStroke.fromJson(Map<String, dynamic> json) {
+    final pointsList = (json['points'] as List? ?? [])
+        .map((p) => Offset((p['x'] as num).toDouble(), (p['y'] as num).toDouble()))
+        .toList();
+    return PaintStroke(
+      points: pointsList,
+      color: Color(json['color'] as int? ?? 0xFFFFD700),
+      strokeWidth: (json['strokeWidth'] as num? ?? 32.0).toDouble(),
+      tool: BrushTool.values[(json['tool'] as int? ?? 0).clamp(0, 2)],
+    );
+  }
 }
 
 class OrbPainter extends CustomPainter {
@@ -22,13 +42,25 @@ class OrbPainter extends CustomPainter {
   final PaintStroke? currentStroke;
   final Map<String, double>? moodPercentages;
   final int? primaryColorValue;
+  final String? serializedStrokeData;
 
   OrbPainter({
     required this.strokes,
     this.currentStroke,
     this.moodPercentages,
     this.primaryColorValue,
+    this.serializedStrokeData,
   });
+
+  static List<PaintStroke> decodeStrokeData(String? jsonString) {
+    if (jsonString == null || jsonString.isEmpty) return [];
+    try {
+      final List<dynamic> decoded = jsonDecode(jsonString);
+      return decoded.map((e) => PaintStroke.fromJson(e as Map<String, dynamic>)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
 
   static Color _getMoodColor(String key) {
     final normalized = key.trim().toLowerCase();
@@ -52,7 +84,7 @@ class OrbPainter extends CustomPainter {
     final circleRect = Rect.fromCircle(center: center, radius: radius);
     final circlePath = Path()..addOval(circleRect);
 
-    // 1. Outer Glass Rim
+    // Glass Rim Outer Border
     final rimPaint = Paint()
       ..color = Colors.white.withOpacity(0.3)
       ..style = PaintingStyle.stroke
@@ -60,25 +92,28 @@ class OrbPainter extends CustomPainter {
 
     canvas.drawCircle(center, radius, rimPaint);
 
-    // 2. Clip all rendering inside glass sphere
+    // Clip rendering inside glass sphere
     canvas.save();
     canvas.clipPath(circlePath);
 
-    // Dark Translucent Glass Sphere Base
+    // Dark Translucent Glass Base Fill
     canvas.drawCircle(
       center,
       radius,
       Paint()..color = const Color(0xFF161622),
     );
 
-    final allStrokes = [...strokes];
-    if (currentStroke != null) allStrokes.add(currentStroke!);
+    List<PaintStroke> renderStrokes = [...strokes];
+    if (renderStrokes.isEmpty && serializedStrokeData != null) {
+      renderStrokes = decodeStrokeData(serializedStrokeData);
+    }
+    if (currentStroke != null) renderStrokes.add(currentStroke!);
 
     canvas.saveLayer(circleRect, Paint()..blendMode = BlendMode.srcOver);
 
-    if (allStrokes.isNotEmpty) {
-      // TIER 1: Live Freehand Touch Strokes
-      for (var stroke in allStrokes) {
+    if (renderStrokes.isNotEmpty) {
+      // TIER 1: Render Saved or Live Freehand Touch Strokes
+      for (var stroke in renderStrokes) {
         if (stroke.points.isEmpty) continue;
 
         double blur = 16.0;
@@ -113,59 +148,43 @@ class OrbPainter extends CustomPainter {
           canvas.drawPath(path, strokePaint);
         }
       }
+    } else if (moodPercentages != null && moodPercentages!.isNotEmpty) {
+      // TIER 2: Fallback Multi-Color Gradient Sweep
+      List<Color> colors = [];
+      moodPercentages!.forEach((key, val) {
+        if (val > 0) colors.add(_getMoodColor(key));
+      });
+
+      if (colors.isEmpty) {
+        final fallback = primaryColorValue != null ? Color(primaryColorValue!) : const Color(0xFFFFD700);
+        colors = [fallback, fallback];
+      } else if (colors.length == 1) {
+        colors.add(colors.first);
+      }
+
+      final sweepGradient = SweepGradient(colors: colors, center: Alignment.center);
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..shader = sweepGradient.createShader(circleRect)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18.0),
+      );
     } else {
-      // TIER 2 & 3: Overlapping 3D Radial Clouds (Saved Entries / App Restart)
-      final activeMoods = <MapEntry<Color, double>>[];
-
-      if (moodPercentages != null && moodPercentages!.isNotEmpty) {
-        moodPercentages!.forEach((key, val) {
-          if (val > 0) {
-            activeMoods.add(MapEntry(_getMoodColor(key), val));
-          }
-        });
-      }
-
-      if (activeMoods.isEmpty) {
-        final fallbackVal = (primaryColorValue != null && primaryColorValue != 0)
-            ? primaryColorValue!
-            : 0xFFFFD700;
-        activeMoods.add(MapEntry(Color(fallbackVal), 100.0));
-      }
-
-      // Render soft overlapping radial clouds (eliminates pie chart sharp lines)
-      final offsets = [
-        Offset(center.dx - radius * 0.3, center.dy - radius * 0.3),
-        Offset(center.dx + radius * 0.3, center.dy + radius * 0.3),
-        Offset(center.dx + radius * 0.2, center.dy - radius * 0.3),
-        Offset(center.dx - radius * 0.3, center.dy + radius * 0.3),
-      ];
-
-      for (int i = 0; i < activeMoods.length; i++) {
-        final color = activeMoods[i].key;
-        final pos = offsets[i % offsets.length];
-
-        final radialGradient = RadialGradient(
-          colors: [
-            color.withOpacity(0.95),
-            color.withOpacity(0.5),
-            color.withOpacity(0.0),
-          ],
-          stops: const [0.0, 0.5, 1.0],
-        );
-
-        canvas.drawCircle(
-          pos,
-          radius * 1.1,
-          Paint()
-            ..shader = radialGradient.createShader(Rect.fromCircle(center: pos, radius: radius * 1.1))
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15.0),
-        );
-      }
+      // TIER 3: Primary Color Safety Fallback
+      final fallbackColor = primaryColorValue != null ? Color(primaryColorValue!) : const Color(0xFFFFD700);
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..color = fallbackColor.withOpacity(0.85)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20.0),
+      );
     }
 
     canvas.restore(); // Restore stroke layer
 
-    // 3. Glass Specular Highlight (3D Shine)
+    // Glass Specular 3D Reflection
     final highlightPath = Path()
       ..addOval(Rect.fromLTWH(
         center.dx - radius * 0.45,
