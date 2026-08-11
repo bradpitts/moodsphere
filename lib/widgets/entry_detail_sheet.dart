@@ -241,12 +241,15 @@ class EntryDetailSheet extends StatelessWidget {
                         separatorBuilder: (_, __) => const SizedBox(width: 12),
                         itemBuilder: (context, index) {
                           final path = entry.safePhotoPaths[index];
+                          final file = File(path);
+                          if (!file.existsSync()) return const SizedBox.shrink();
+
                           return GestureDetector(
                             onTap: () => _openPhotoViewer(context, path),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(14),
                               child: Image.file(
-                                File(path),
+                                file,
                                 width: 110,
                                 height: 110,
                                 fit: BoxFit.cover,

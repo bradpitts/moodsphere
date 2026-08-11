@@ -77,6 +77,8 @@ class OrbPainter extends CustomPainter {
     }
   }
 
+  static int getMoodColorValue(String key) => _getMoodColor(key).value;
+
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);

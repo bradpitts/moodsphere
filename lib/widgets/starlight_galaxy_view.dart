@@ -226,23 +226,32 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
     // 4. Render Mood Stars with Multi-Layered Radial Light Halos
     for (int i = 0; i < starPoints.length; i++) {
       final pos = starPoints[i];
-      final color = starColors[i];
+      final primaryColor = starColors[i];
 
-      final outerHaloPaint = Paint()
-        ..shader = RadialGradient(
-          colors: [
-            color.withOpacity(0.85),
-            color.withOpacity(0.3),
-            Colors.transparent,
-          ],
-          stops: const [0.0, 0.5, 1.0],
-        ).createShader(Rect.fromCircle(center: pos, radius: 26))
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+      // Outer ambient atmospheric glow halo
+      canvas.drawCircle(
+        pos,
+        28.0,
+        Paint()
+          ..color = primaryColor.withOpacity(0.5)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14),
+      );
 
-      canvas.drawCircle(pos, 26, outerHaloPaint);
+      // Inner color core
+      canvas.drawCircle(
+        pos,
+        14.0,
+        Paint()
+          ..color = primaryColor.withOpacity(0.85)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+      );
 
-      final corePaint = Paint()..color = Colors.white;
-      canvas.drawCircle(pos, 5.5, corePaint);
+      // Bright central hot spot
+      canvas.drawCircle(
+        pos,
+        6.0,
+        Paint()..color = Colors.white.withOpacity(0.95),
+      );
     }
   }
 

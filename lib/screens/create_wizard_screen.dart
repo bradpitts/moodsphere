@@ -163,6 +163,14 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
 
     await _flyAnimationController.forward();
 
+    int calculatedPrimaryColor = _selectedMood.color.value;
+    if (_moodPercentages.isNotEmpty) {
+      String dominantMood = _moodPercentages.entries
+          .reduce((a, b) => a.value > b.value ? a : b)
+          .key;
+      calculatedPrimaryColor = OrbPainter.getMoodColorValue(dominantMood);
+    }
+
     final strokeJson = _strokes.isNotEmpty
         ? jsonEncode(_strokes.map((s) => s.toJson()).toList())
         : null;
@@ -170,7 +178,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
     final newEntry = MoodEntry(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       date: DateTime.now(),
-      primaryColorValue: _selectedMood.color.value,
+      primaryColorValue: calculatedPrimaryColor,
       moodPercentages: Map.from(_moodPercentages),
       stateTags: const [], // Default empty state tags for 3-step wizard
       note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
