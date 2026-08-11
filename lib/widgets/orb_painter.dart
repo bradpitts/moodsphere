@@ -65,15 +65,30 @@ class OrbPainter extends CustomPainter {
   static Color _getMoodColor(String key) {
     final normalized = key.trim().toLowerCase();
     switch (normalized) {
-      case 'joy': return const Color(0xFFFFD700);
-      case 'serenity': return const Color(0xFF4EECD5);
-      case 'love': return const Color(0xFFFF5252);
-      case 'longing': return const Color(0xFF448AFF);
-      case 'sadness': return const Color(0xFF29B6F6);
-      case 'anger': return const Color(0xFFFF3D00);
-      case 'disgust': return const Color(0xFF66BB6A);
-      case 'fear': return const Color(0xFFAB47BC);
-      default: return const Color(0xFFFFD700);
+      // Positive Moods
+      case 'joy': return const Color(0xFFFFD700); // Yellow
+      case 'serenity': return const Color(0xFF4EECD5); // Cyan / Mint
+      case 'love': return const Color(0xFFFF5252); // Red / Pink
+      case 'longing': return const Color(0xFF448AFF); // Blue
+      case 'confidence': return const Color(0xFFAB47BC); // Purple / Violet
+      case 'peace': return const Color(0xFF81C784); // Soft Green
+      case 'hope': return const Color(0xFFFFB74D); // Amber / Orange
+      case 'gratitude': return const Color(0xFFFF80AB); // Deep Pink
+
+      // Negative Moods
+      case 'sadness': return const Color(0xFF29B6F6); // Light Blue
+      case 'anger': return const Color(0xFFFF3D00); // Dark Red / Orange
+      case 'disgust': return const Color(0xFF66BB6A); // Green
+      case 'fear': return const Color(0xFF7E57C2); // Deep Purple
+      case 'anxiety': return const Color(0xFFFF7043); // Coral / Orange
+      case 'guilt': return const Color(0xFF78909C); // Slate / Grey
+      case 'frustration': return const Color(0xFFEC407A); // Magenta
+
+      default:
+        // Deterministic fallback color based on string hash so unknown custom moods get a unique color
+        final int hash = normalized.hashCode;
+        final double hue = (hash.abs() % 360).toDouble();
+        return HSVColor.fromAHSV(1.0, hue, 0.75, 0.95).toColor();
     }
   }
 

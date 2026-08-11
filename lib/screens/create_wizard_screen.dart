@@ -163,11 +163,18 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen>
 
     await _flyAnimationController.forward();
 
-    int calculatedPrimaryColor = _selectedMood.color.value;
+    int calculatedPrimaryColor = 0xFFFFD700;
     if (_moodPercentages.isNotEmpty) {
-      String dominantMood = _moodPercentages.entries
-          .reduce((a, b) => a.value > b.value ? a : b)
-          .key;
+      double maxVal = -1;
+      String dominantMood = _moodPercentages.keys.first;
+
+      _moodPercentages.forEach((mood, val) {
+        if (val > maxVal) {
+          maxVal = val;
+          dominantMood = mood;
+        }
+      });
+
       calculatedPrimaryColor = OrbPainter.getMoodColorValue(dominantMood);
     }
 
