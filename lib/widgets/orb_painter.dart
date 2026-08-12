@@ -43,7 +43,7 @@ class OrbPainter extends CustomPainter {
   final Map<String, double>? moodPercentages;
   final int? primaryColorValue;
   final String? serializedStrokeData;
-  final bool isInteractiveWizard; // Explicit flag for creation canvas
+  final bool isInteractiveWizard; 
 
   OrbPainter({
     required this.strokes,
@@ -59,9 +59,7 @@ class OrbPainter extends CustomPainter {
     try {
       final List<dynamic> decoded = jsonDecode(jsonString);
       return decoded.map((e) => PaintStroke.fromJson(e as Map<String, dynamic>)).toList();
-    } catch (_) {
-      return [];
-    }
+    } catch (_) { return []; }
   }
 
   static Color _getMoodColor(String key) {
@@ -72,9 +70,11 @@ class OrbPainter extends CustomPainter {
       case 'love': return const Color(0xFFFF5252);
       case 'longing': return const Color(0xFF448AFF);
       case 'confidence': return const Color(0xFFAB47BC);
-      case 'peace': return const Color(0xFF81C784);
-      case 'hope': return const Color(0xFFFFB74D);
+      case 'hope': return const Color(0xFF7ED321);
       case 'gratitude': return const Color(0xFFFF80AB);
+      case 'inspiration': return const Color(0xFFB39DDB);
+      case 'empathy': return const Color(0xFF81D4FA);
+      case 'balance': return const Color(0xFFAED581);
       case 'sadness': return const Color(0xFF29B6F6);
       case 'anger': return const Color(0xFFFF3D00);
       case 'disgust': return const Color(0xFF66BB6A);
@@ -82,10 +82,29 @@ class OrbPainter extends CustomPainter {
       case 'anxiety': return const Color(0xFFFF7043);
       case 'guilt': return const Color(0xFF78909C);
       case 'frustration': return const Color(0xFFEC407A);
-      default:
-        final int hash = normalized.hashCode;
-        final double hue = (hash.abs() % 360).toDouble();
-        return HSVColor.fromAHSV(1.0, hue, 0.75, 0.95).toColor();
+      case 'overwhelmed': return const Color(0xFF5C6BC0);
+      case 'apathy': return const Color(0xFFBDBDBD);
+      case 'neutral': return const Color(0xFFE5E5EA);
+      default: return const Color(0xFFFFD700);
+    }
+  }
+
+  static String getRashiForMood(String dominantMood) {
+    final normalized = dominantMood.trim().toLowerCase();
+    switch (normalized) {
+      case 'anger': case 'frustration': return 'Mesha (Aries)';
+      case 'serenity': case 'balance': return 'Vrishabha (Taurus)';
+      case 'joy': return 'Mithuna (Gemini)';
+      case 'sadness': case 'empathy': return 'Karka (Cancer)';
+      case 'confidence': case 'hope': return 'Simha (Leo)';
+      case 'neutral': case 'apathy': return 'Kanya (Virgo)';
+      case 'love': return 'Tula (Libra)';
+      case 'fear': case 'disgust': case 'overwhelmed': return 'Vrishchika (Scorpio)';
+      case 'inspiration': case 'longing': return 'Dhanu (Sagittarius)';
+      case 'guilt': return 'Makara (Capricorn)';
+      case 'anxiety': return 'Kumbha (Aquarius)';
+      case 'gratitude': case 'peace': return 'Meena (Pisces)';
+      default: return 'Unknown';
     }
   }
 
@@ -99,23 +118,16 @@ class OrbPainter extends CustomPainter {
     final circleRect = Rect.fromCircle(center: center, radius: radius);
     final circlePath = Path()..addOval(circleRect);
 
-    // Glass Outer Rim
     final rimPaint = Paint()
       ..color = Colors.white.withOpacity(0.3)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
 
     canvas.drawCircle(center, radius, rimPaint);
-
     canvas.save();
     canvas.clipPath(circlePath);
 
-    // Dark Translucent Glass Base
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()..color = const Color(0xFF161622),
-    );
+    canvas.drawCircle(center, radius, Paint()..color = const Color(0xFF161622));
 
     List<PaintStroke> renderStrokes = [...strokes];
     if (renderStrokes.isEmpty && serializedStrokeData != null && !isInteractiveWizard) {
@@ -123,7 +135,6 @@ class OrbPainter extends CustomPainter {
     }
     if (currentStroke != null) renderStrokes.add(currentStroke!);
 
-    // Layer 1: Mood Percentage Background Gradient 
     if (!isInteractiveWizard && moodPercentages != null && moodPercentages!.isNotEmpty) {
       List<Color> colors = [];
       moodPercentages!.forEach((key, val) {
@@ -133,9 +144,7 @@ class OrbPainter extends CustomPainter {
       if (colors.isEmpty) {
         final fallback = primaryColorValue != null ? Color(primaryColorValue!) : const Color(0xFFFFD700);
         colors = [fallback, fallback];
-      } else if (colors.length == 1) {
-        colors.add(colors.first);
-      }
+      } else if (colors.length == 1) colors.add(colors.first);
 
       final sweepGradient = SweepGradient(colors: colors, center: Alignment.center);
       canvas.drawCircle(
@@ -146,7 +155,6 @@ class OrbPainter extends CustomPainter {
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18.0),
       );
     } else if (!isInteractiveWizard && renderStrokes.isEmpty) {
-      // Safety Fallback (ONLY for saved entries with no strokes and no percentages)
       final fallbackColor = primaryColorValue != null ? Color(primaryColorValue!) : const Color(0xFFFFD700);
       canvas.drawCircle(
         center,
@@ -157,19 +165,11 @@ class OrbPainter extends CustomPainter {
       );
     }
 
-    // Layer 2: Freehand Touch Strokes (Painted over the background)
     canvas.saveLayer(circleRect, Paint()..blendMode = BlendMode.srcOver);
     if (renderStrokes.isNotEmpty) {
       for (var stroke in renderStrokes) {
         if (stroke.points.isEmpty) continue;
-
-        double blur = 16.0;
-        switch (stroke.tool) {
-          case BrushTool.spray: blur = 28.0; break;
-          case BrushTool.marker: blur = 4.0; break;
-          case BrushTool.paintbrush: default: blur = 16.0; break;
-        }
-
+        double blur = stroke.tool == BrushTool.spray ? 28.0 : (stroke.tool == BrushTool.marker ? 4.0 : 16.0);
         final strokePaint = Paint()
           ..color = stroke.color.withOpacity(0.85)
           ..style = PaintingStyle.stroke
@@ -182,9 +182,7 @@ class OrbPainter extends CustomPainter {
           canvas.drawCircle(
             stroke.points.first,
             stroke.strokeWidth / 2,
-            Paint()
-              ..color = stroke.color.withOpacity(0.85)
-              ..maskFilter = MaskFilter.blur(BlurStyle.normal, blur),
+            Paint()..color = stroke.color.withOpacity(0.85)..maskFilter = MaskFilter.blur(BlurStyle.normal, blur),
           );
         } else {
           final path = Path();
@@ -196,27 +194,16 @@ class OrbPainter extends CustomPainter {
         }
       }
     }
-    canvas.restore(); // Restore stroke layer
+    canvas.restore(); 
 
-    // Glass Specular 3D Reflection
     final highlightPath = Path()
-      ..addOval(Rect.fromLTWH(
-        center.dx - radius * 0.45,
-        center.dy - radius * 0.6,
-        radius * 0.4,
-        radius * 0.22,
-      ));
-
+      ..addOval(Rect.fromLTWH(center.dx - radius * 0.45, center.dy - radius * 0.6, radius * 0.4, radius * 0.22));
     canvas.drawPath(
       highlightPath,
-      Paint()
-        ..color = Colors.white.withOpacity(0.25)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0),
+      Paint()..color = Colors.white.withOpacity(0.25)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0),
     );
-
-    canvas.restore(); // Restore clip
+    canvas.restore();
   }
-
   @override
   bool shouldRepaint(covariant OrbPainter oldDelegate) => true;
 }
