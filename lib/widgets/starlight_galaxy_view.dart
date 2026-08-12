@@ -257,31 +257,32 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
   }
 
   void _drawParallaxDustClouds(Canvas canvas, Size size) {
-    final clouds = [
-      _DustCloudSpec(baseCenter: Offset(size.width * 0.2, size.height * 0.3), radius: size.width * 0.7, color: const Color(0xFF2A004F), speedX: 0.25, speedY: 0.1),
-      _DustCloudSpec(baseCenter: Offset(size.width * 0.75, size.height * 0.65), radius: size.width * 0.8, color: const Color(0xFF002A38), speedX: -0.3, speedY: 0.15),
-      _DustCloudSpec(baseCenter: Offset(size.width * 0.4, size.height * 0.8), radius: size.width * 0.65, color: const Color(0xFF3B0029), speedX: 0.35, speedY: -0.2),
-      _DustCloudSpec(baseCenter: Offset(size.width * 0.85, size.height * 0.25), radius: size.width * 0.6, color: const Color(0xFF16003B), speedX: -0.2, speedY: -0.15),
-    ];
+  final clouds = [
+    _DustCloudSpec(baseCenter: Offset(size.width * 0.2, size.height * 0.3), radius: size.width * 0.7, color: const Color(0xFF2A004F), speedX: 0.25, speedY: 0.1),
+    _DustCloudSpec(baseCenter: Offset(size.width * 0.75, size.height * 0.65), radius: size.width * 0.8, color: const Color(0xFF002A38), speedX: -0.3, speedY: 0.15),
+    _DustCloudSpec(baseCenter: Offset(size.width * 0.4, size.height * 0.8), radius: size.width * 0.65, color: const Color(0xFF3B0029), speedX: 0.35, speedY: -0.2),
+    _DustCloudSpec(baseCenter: Offset(size.width * 0.85, size.height * 0.25), radius: size.width * 0.6, color: const Color(0xFF16003B), speedX: -0.2, speedY: -0.15),
+  ];
 
-    for (var cloud in clouds) {
-      final offsetX = (driftVal * size.width * cloud.speedX) % (size.width * 1.4);
-      final offsetY = (driftVal * size.height * cloud.speedY) % (size.height * 1.4);
+  for (var cloud in clouds) {
+    // Use sine to create continuous back‑and‑forth motion
+    final offsetX = (driftVal * 2 * math.pi * cloud.speedX).sin * size.width * 0.3;
+    final offsetY = (driftVal * 2 * math.pi * cloud.speedY).sin * size.height * 0.3;
 
-      final currentPos = Offset(
-        (cloud.baseCenter.dx + offsetX) % (size.width + cloud.radius) - (cloud.radius * 0.5),
-        (cloud.baseCenter.dy + offsetY) % (size.height + cloud.radius) - (cloud.radius * 0.5),
-      );
+    final currentPos = Offset(
+      (cloud.baseCenter.dx + offsetX) % (size.width + cloud.radius * 2) - cloud.radius,
+      (cloud.baseCenter.dy + offsetY) % (size.height + cloud.radius * 2) - cloud.radius,
+    );
 
-      final cloudPaint = Paint()
-        ..shader = RadialGradient(
-          colors: [cloud.color.withOpacity(0.55), cloud.color.withOpacity(0.2), Colors.transparent],
-          stops: const [0.0, 0.55, 1.0],
-        ).createShader(Rect.fromCircle(center: currentPos, radius: cloud.radius));
+    final cloudPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [cloud.color.withOpacity(0.55), cloud.color.withOpacity(0.2), Colors.transparent],
+        stops: const [0.0, 0.55, 1.0],
+      ).createShader(Rect.fromCircle(center: currentPos, radius: cloud.radius));
 
-      canvas.drawCircle(currentPos, cloud.radius, cloudPaint);
-    }
+    canvas.drawCircle(currentPos, cloud.radius, cloudPaint);
   }
+}
 
   @override
   bool shouldRepaint(covariant _GalaxySpaceDriftPainter oldDelegate) => true;

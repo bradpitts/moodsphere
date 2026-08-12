@@ -56,10 +56,14 @@ class _GeneralEntryScreenState extends ConsumerState<GeneralEntryScreen> {
     try {
       String? permanentPath;
       if (_selectedPhotoFile != null) {
-         final docDir = await getApplicationDocumentsDirectory();
-         final String safeName = _selectedPhotoFile!.name.isNotEmpty ? _selectedPhotoFile!.name : 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
-         permanentPath = '${docDir.path}/${DateTime.now().millisecondsSinceEpoch}_$safeName';
-         await _selectedPhotoFile!.saveTo(permanentPath);
+        final docDir = await getApplicationDocumentsDirectory();
+        final String safeName = _selectedPhotoFile!.name.isNotEmpty ? _selectedPhotoFile!.name : 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final String savedPath = '${docDir.path}/${DateTime.now().millisecondsSinceEpoch}_$safeName';
+        final File savedFile = File(savedPath);
+        await _selectedPhotoFile!.saveTo(savedFile.path);
+        if (await savedFile.exists()) {
+          permanentPath = savedFile.absolute.path;
+        }
       }
 
       final newEntry = GeneralEntry(

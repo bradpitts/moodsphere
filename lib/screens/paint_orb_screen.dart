@@ -80,16 +80,21 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen> with SingleTick
 
       String? permanentPath;
       if (_selectedPhotoFile != null) {
-         final docDir = await getApplicationDocumentsDirectory();
-         final String safeName = _selectedPhotoFile!.name.isNotEmpty ? _selectedPhotoFile!.name : 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
-         permanentPath = '${docDir.path}/${DateTime.now().millisecondsSinceEpoch}_$safeName';
-         await _selectedPhotoFile!.saveTo(permanentPath);
+        final docDir = await getApplicationDocumentsDirectory();
+        final String safeName = _selectedPhotoFile!.name.isNotEmpty ? _selectedPhotoFile!.name : 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final String savedPath = '${docDir.path}/${DateTime.now().millisecondsSinceEpoch}_$safeName';
+        final File savedFile = File(savedPath);
+        await _selectedPhotoFile!.saveTo(savedFile.path);
+        if (await savedFile.exists()) {
+          permanentPath = savedFile.absolute.path;
+        }
       }
 
       final newEntry = MoodEntry(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         date: DateTime.now(),
-        colorValue: _selectedColor.value,
+        primaryColorValue: _selectedColor.value,
+        moodPercentages: {}, // empty, but we set the primary color
         note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
         photoPaths: permanentPath != null ? [permanentPath] : null,
       );

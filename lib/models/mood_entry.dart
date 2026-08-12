@@ -1,6 +1,6 @@
 import 'package:hive/hive.dart';
 
-part 'mood_entry.g.dart';
+part 'mood_entry_adapter.dart'; // renamed from .g.dart
 
 @HiveType(typeId: 0)
 class MoodEntry extends HiveObject {
@@ -11,7 +11,7 @@ class MoodEntry extends HiveObject {
   final DateTime date;
 
   @HiveField(2)
-  final Map<dynamic, dynamic>? _moodPercentages;
+  final Map<dynamic, dynamic> _moodPercentages; // now non‑nullable
 
   @HiveField(3)
   final String? note;
@@ -35,23 +35,19 @@ class MoodEntry extends HiveObject {
     this.note,
     List<String>? photoPaths,
     int? primaryColorValue,
-    int? colorValue,
     List<String>? stateTags,
     this.strokeData,
-  })  : _moodPercentages = moodPercentages,
+  })  : _moodPercentages = moodPercentages ?? {},
         _photoPaths = photoPaths,
-        _primaryColorValue = primaryColorValue ?? colorValue,
+        _primaryColorValue = primaryColorValue,
         _stateTags = stateTags;
 
-  int get primaryColorValue => (_primaryColorValue != null && _primaryColorValue! != 0) 
-      ? _primaryColorValue! 
-      : 0xFFFFD700;
+  int get primaryColorValue => _primaryColorValue ?? 0xFFFFD700;
   int get colorValue => primaryColorValue;
 
   Map<String, double> get moodPercentages {
-    if (_moodPercentages == null) return {};
     final Map<String, double> result = {};
-    _moodPercentages!.forEach((key, value) {
+    _moodPercentages.forEach((key, value) {
       if (key != null && value != null) {
         result[key.toString()] = (value as num).toDouble();
       }

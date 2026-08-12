@@ -160,12 +160,12 @@ class _MoodSphereAppState extends State<MoodSphereApp> with WidgetsBindingObserv
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused && widget.isLocked) {
-      setState(() { _unlocked = false; });
-    }
+ @override
+void didChangeAppLifecycleState(AppLifecycleState state) {
+  if ((state == AppLifecycleState.paused || state == AppLifecycleState.inactive) && widget.isLocked) {
+    setState(() { _unlocked = false; });
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -173,4 +173,5 @@ class _MoodSphereAppState extends State<MoodSphereApp> with WidgetsBindingObserv
         ? const HomeScreen()
         : AppLockScreen(onUnlocked: () => setState(() => _unlocked = true));
   }
+
 }

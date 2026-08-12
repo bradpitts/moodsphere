@@ -113,8 +113,8 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen> with Si
     try {
       final XFile? file = await _picker.pickImage(
         source: ImageSource.gallery,
-        maxWidth: 1200, 
-        maxHeight: 1200, 
+        maxWidth: 1200,
+        maxHeight: 1200,
         imageQuality: 75,
       );
       if (file != null) {
@@ -132,12 +132,18 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen> with Si
     try {
       List<String> permanentPaths = [];
       final docDir = await getApplicationDocumentsDirectory();
-      
+
       for (var file in _selectedFiles) {
         final String safeName = file.name.isNotEmpty ? file.name : 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
         final String savedPath = '${docDir.path}/${DateTime.now().millisecondsSinceEpoch}_$safeName';
-        await file.saveTo(savedPath);
-        permanentPaths.add(savedPath);
+        final File savedFile = File(savedPath);
+        await file.saveTo(savedFile.path);
+        // Verify the file exists
+        if (await savedFile.exists()) {
+          permanentPaths.add(savedFile.absolute.path);
+        } else {
+          print('Failed to save image to $savedPath');
+        }
       }
 
       int calculatedPrimaryColor = 0xFFFFD700;
@@ -176,6 +182,12 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen> with Si
     }
   }
 
+  void _prevPage() {
+    if (_currentStep > 0) {
+      _pageController.previousPage(duration: const Duration(milliseconds: 350), curve: Curves.easeInOut);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -184,6 +196,13 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen> with Si
         leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.of(context).pop()),
         title: Text('Step ${_currentStep + 1} of 3'),
         centerTitle: true,
+        actions: [
+          if (_currentStep > 0)
+            IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: _prevPage,
+            ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(6),
           child: LinearProgressIndicator(
@@ -222,6 +241,21 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen> with Si
               onPressed: () => setState(() { _isPositivePalette = false; _selectedMood = negativePalette.first; }),
               child: Text('Negative', style: TextStyle(color: !_isPositivePalette ? Colors.blue : Colors.grey)),
             ),
+          ],
+        ),
+        // Brush tool selector
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (var tool in BrushTool.values)
+              IconButton(
+                icon: Icon(
+                  tool == BrushTool.paintbrush ? Icons.brush :
+                  tool == BrushTool.spray ? Icons.spray : Icons.edit,
+                ),
+                color: _selectedTool == tool ? Colors.yellow : Colors.white54,
+                onPressed: () => setState(() => _selectedTool = tool),
+              ),
           ],
         ),
         const Spacer(),

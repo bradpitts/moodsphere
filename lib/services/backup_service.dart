@@ -4,6 +4,7 @@ import 'package:archive/archive_io.dart';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:flutter/material.dart';
 
 import '../models/mood_entry.dart';
 import '../models/general_entry.dart';
@@ -13,7 +14,7 @@ class BackupService {
     final moodBox = Hive.box<MoodEntry>('mood_entries');
     final generalBox = Hive.box<GeneralEntry>('general_entries');
 
-    // 1. Serialize entries
+    // Serialize entries
     final moodEntriesData = moodBox.values.map((e) => {
           'id': e.id,
           'date': e.date.toIso8601String(),
@@ -39,7 +40,7 @@ class BackupService {
 
     final jsonString = const JsonEncoder.withIndent('  ').convert(backupPayload);
 
-    // 2. Prepare Zip Archive
+    // Prepare Zip Archive
     final encoder = ZipFileEncoder();
     final tempDir = await getTemporaryDirectory();
     final zipPath = '${tempDir.path}/MoodSphere_Backup_${DateTime.now().millisecondsSinceEpoch}.zip';
@@ -73,11 +74,16 @@ class BackupService {
 
     encoder.close();
 
-    // 3. Share via share_plus
+    // Share and cleanup
     await Share.shareXFiles(
       [XFile(zipPath)],
       text: 'MoodSphere Local Backup Archive',
       subject: 'MoodSphere Data Backup',
     );
+
+    // Delete temp file after sharing (it may still be in use, but we can try)
+    try {
+      await File(zipPath).delete();
+    } catch (_) {}
   }
 }

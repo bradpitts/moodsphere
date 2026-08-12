@@ -43,7 +43,7 @@ class OrbPainter extends CustomPainter {
   final Map<String, double>? moodPercentages;
   final int? primaryColorValue;
   final String? serializedStrokeData;
-  final bool isInteractiveWizard; 
+  final bool isInteractiveWizard;
 
   OrbPainter({
     required this.strokes,
@@ -66,7 +66,8 @@ class OrbPainter extends CustomPainter {
     final normalized = key.trim().toLowerCase();
     switch (normalized) {
       case 'joy': return const Color(0xFFFFD700);
-      case 'serenity': return const Color(0xFF4EECD5);
+      case 'serenity': return const Color(0xFF50E3C2); // unified with palette
+      case 'serene': return const Color(0xFF3498DB); // added missing
       case 'love': return const Color(0xFFFF5252);
       case 'longing': return const Color(0xFF448AFF);
       case 'confidence': return const Color(0xFFAB47BC);
@@ -97,13 +98,13 @@ class OrbPainter extends CustomPainter {
 
   static String getMoodFromColorValue(int colorValue) {
     if (colorValue == 0xFFFFD700) return 'Joy';
-    if (colorValue == 0xFF2ECC71) return 'Calm'; 
-    if (colorValue == 0xFF3498DB) return 'Serene'; 
-    if (colorValue == 0xFFE74C3C) return 'Energy'; 
-    if (colorValue == 0xFF9B59B6) return 'Creative'; 
-    if (colorValue == 0xFFFF6B6B) return 'Passion'; 
-    if (colorValue == 0xFF5D6D7E) return 'Melancholy'; 
-    if (colorValue == 0xFF1ABC9C) return 'Peace'; 
+    if (colorValue == 0xFF2ECC71) return 'Calm';
+    if (colorValue == 0xFF3498DB) return 'Serene';
+    if (colorValue == 0xFFE74C3C) return 'Energy';
+    if (colorValue == 0xFF9B59B6) return 'Creative';
+    if (colorValue == 0xFFFF6B6B) return 'Passion';
+    if (colorValue == 0xFF5D6D7E) return 'Melancholy';
+    if (colorValue == 0xFF1ABC9C) return 'Peace';
     return 'Neutral';
   }
 
@@ -212,7 +213,7 @@ class OrbPainter extends CustomPainter {
         }
       }
     }
-    canvas.restore(); 
+    canvas.restore();
 
     final highlightPath = Path()
       ..addOval(Rect.fromLTWH(center.dx - radius * 0.45, center.dy - radius * 0.6, radius * 0.4, radius * 0.22));
@@ -222,6 +223,7 @@ class OrbPainter extends CustomPainter {
     );
     canvas.restore();
   }
+
   @override
   bool shouldRepaint(covariant OrbPainter oldDelegate) => true;
 }
