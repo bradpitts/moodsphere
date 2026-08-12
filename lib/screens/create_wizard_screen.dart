@@ -121,7 +121,6 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen> with Si
     if (_isSaving) return;
     setState(() => _isSaving = true);
 
-    // Save photos permanently
     List<String> permanentPaths = [];
     final docDir = await getApplicationDocumentsDirectory();
     for (String tempPath in _photoPaths) {

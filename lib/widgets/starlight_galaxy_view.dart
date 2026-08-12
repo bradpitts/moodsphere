@@ -141,7 +141,40 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = math.min(size.width, size.height) / 2.5 * scale;
 
-    // Constellation tracking
+    // 1. RESTORED: Parallax Nebula Dust Clouds
+    _drawParallaxDustClouds(canvas, size);
+
+    // 2. RESTORED: 220 Background Ambient Stars
+    final starRandom = math.Random(101);
+    final driftOffsetZ = (driftVal * 300) % 600;
+
+    for (int i = 0; i < 220; i++) {
+      final rawX = (starRandom.nextDouble() - 0.5) * 1200;
+      final rawY = (starRandom.nextDouble() - 0.5) * 1200;
+      final rawZ = (starRandom.nextDouble() - 0.5) * 1200 + driftOffsetZ;
+
+      final wrappedZ = ((rawZ + 600) % 1200) - 600;
+
+      final rotX = rawX * math.cos(yaw) - wrappedZ * math.sin(yaw);
+      final rotZ = rawX * math.sin(yaw) + wrappedZ * math.cos(yaw);
+      final rotY = rawY * math.cos(pitch) - rotZ * math.sin(pitch);
+
+      final perspectiveFactor = (800.0 / (800.0 + rotZ)).clamp(0.2, 2.0);
+      final sx = center.dx + rotX * perspectiveFactor * 0.7;
+      final sy = center.dy + rotY * perspectiveFactor * 0.7;
+
+      if (sx >= -20 && sx <= size.width + 20 && sy >= -20 && sy <= size.height + 20) {
+        final sSize = (starRandom.nextDouble() * 2.0 + 0.8) * perspectiveFactor;
+        final twinkle = math.sin((driftVal * 4 * math.pi) + i) * 0.35 + 0.55;
+
+        final starPaint = Paint()..color = Colors.white.withOpacity(twinkle.clamp(0.15, 0.9));
+        canvas.drawCircle(Offset(sx, sy), sSize, starPaint);
+      }
+    }
+
+    if (entries.isEmpty) return;
+
+    // 3. Constellation & Mood Star Setup
     Map<String, List<Offset>> rashiConstellations = {};
     final starPoints = <Offset>[];
     final starEntries = <MoodEntry>[];
@@ -165,7 +198,6 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
       starPoints.add(screenPos);
       starEntries.add(entry);
 
-      // Group stars into Zodiacs based on dominant mood
       String dominantMood = '';
       double maxVal = -1;
       if (entry.moodPercentages.isNotEmpty) {
@@ -179,7 +211,7 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
       }
     }
 
-    // DRAW CONSTELLATION LINES FIRST (so they are under the stars)
+    // 4. Draw Zodiac Constellation Lines
     final linePaint = Paint()
       ..color = Colors.white.withOpacity(0.25)
       ..strokeWidth = 1.2
@@ -195,14 +227,13 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
         }
         canvas.drawPath(path, linePaint);
         
-        // Connect the last star back to the first to form closed shapes if >=3 stars
         if (rashiGroup.value.length >= 3) {
            canvas.drawLine(rashiGroup.value.last, rashiGroup.value.first, linePaint);
         }
       }
     }
 
-    // DRAW MOOD STARS
+    // 5. Draw Mood Stars (Multi-color support)
     for (int i = 0; i < starPoints.length; i++) {
       final pos = starPoints[i];
       final entry = starEntries[i];
@@ -222,6 +253,43 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
     }
   }
 
+  void _drawParallaxDustClouds(Canvas canvas, Size size) {
+    final clouds = [
+      _DustCloudSpec(baseCenter: Offset(size.width * 0.2, size.height * 0.3), radius: size.width * 0.7, color: const Color(0xFF2A004F), speedX: 0.25, speedY: 0.1),
+      _DustCloudSpec(baseCenter: Offset(size.width * 0.75, size.height * 0.65), radius: size.width * 0.8, color: const Color(0xFF002A38), speedX: -0.3, speedY: 0.15),
+      _DustCloudSpec(baseCenter: Offset(size.width * 0.4, size.height * 0.8), radius: size.width * 0.65, color: const Color(0xFF3B0029), speedX: 0.35, speedY: -0.2),
+      _DustCloudSpec(baseCenter: Offset(size.width * 0.85, size.height * 0.25), radius: size.width * 0.6, color: const Color(0xFF16003B), speedX: -0.2, speedY: -0.15),
+    ];
+
+    for (var cloud in clouds) {
+      final offsetX = (driftVal * size.width * cloud.speedX) % (size.width * 1.4);
+      final offsetY = (driftVal * size.height * cloud.speedY) % (size.height * 1.4);
+
+      final currentPos = Offset(
+        (cloud.baseCenter.dx + offsetX) % (size.width + cloud.radius) - (cloud.radius * 0.5),
+        (cloud.baseCenter.dy + offsetY) % (size.height + cloud.radius) - (cloud.radius * 0.5),
+      );
+
+      final cloudPaint = Paint()
+        ..shader = RadialGradient(
+          colors: [cloud.color.withOpacity(0.55), cloud.color.withOpacity(0.2), Colors.transparent],
+          stops: const [0.0, 0.55, 1.0],
+        ).createShader(Rect.fromCircle(center: currentPos, radius: cloud.radius));
+
+      canvas.drawCircle(currentPos, cloud.radius, cloudPaint);
+    }
+  }
+
   @override
   bool shouldRepaint(covariant _GalaxySpaceDriftPainter oldDelegate) => true;
+}
+
+class _DustCloudSpec {
+  final Offset baseCenter;
+  final double radius;
+  final Color color;
+  final double speedX;
+  final double speedY;
+
+  _DustCloudSpec({required this.baseCenter, required this.radius, required this.color, required this.speedX, required this.speedY});
 }
