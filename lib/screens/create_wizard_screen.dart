@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -59,7 +58,7 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen> with Si
     MoodPaletteItem('Apathy', Color(0xFFBDBDBD)),
   ];
 
-  final List<String> _photoPaths = [];
+  final List<XFile> _selectedFiles = [];
   final ImagePicker _picker = ImagePicker();
   final TextEditingController _noteController = TextEditingController();
   bool _isSaving = false;
@@ -111,9 +110,18 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen> with Si
   }
 
   Future<void> _pickImage() async {
-    final file = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-    if (file != null) {
-      setState(() { _photoPaths.add(file.path); });
+    try {
+      final XFile? file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1200, 
+        maxHeight: 1200, 
+        imageQuality: 75,
+      );
+      if (file != null) {
+        setState(() { _selectedFiles.add(file); });
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to pick image: $e')));
     }
   }
 
@@ -121,36 +129,45 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen> with Si
     if (_isSaving) return;
     setState(() => _isSaving = true);
 
-    List<String> permanentPaths = [];
-    final docDir = await getApplicationDocumentsDirectory();
-    for (String tempPath in _photoPaths) {
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${tempPath.split('/').last}';
-      final savedFile = await File(tempPath).copy('${docDir.path}/$fileName');
-      permanentPaths.add(savedFile.path);
+    try {
+      List<String> permanentPaths = [];
+      final docDir = await getApplicationDocumentsDirectory();
+      
+      for (var file in _selectedFiles) {
+        final String safeName = file.name.isNotEmpty ? file.name : 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final String savedPath = '${docDir.path}/${DateTime.now().millisecondsSinceEpoch}_$safeName';
+        await file.saveTo(savedPath);
+        permanentPaths.add(savedPath);
+      }
+
+      int calculatedPrimaryColor = 0xFFFFD700;
+      if (_moodPercentages.isNotEmpty) {
+        double maxVal = -1;
+        String dominantMood = _moodPercentages.keys.first;
+        _moodPercentages.forEach((mood, val) {
+          if (val > maxVal) { maxVal = val; dominantMood = mood; }
+        });
+        calculatedPrimaryColor = OrbPainter.getMoodColorValue(dominantMood);
+      }
+
+      final Map<dynamic, dynamic> safeMapForHive = _moodPercentages.map((key, value) => MapEntry<dynamic, dynamic>(key, value));
+
+      final newEntry = MoodEntry(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        date: DateTime.now(),
+        primaryColorValue: calculatedPrimaryColor,
+        moodPercentages: safeMapForHive,
+        note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
+        photoPaths: permanentPaths.isEmpty ? null : permanentPaths,
+        strokeData: _strokes.isNotEmpty ? jsonEncode(_strokes.map((s) => s.toJson()).toList()) : null,
+      );
+
+      await ref.read(moodNotifierProvider.notifier).addEntry(newEntry);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      setState(() => _isSaving = false);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save entry: $e')));
     }
-
-    int calculatedPrimaryColor = 0xFFFFD700;
-    if (_moodPercentages.isNotEmpty) {
-      double maxVal = -1;
-      String dominantMood = _moodPercentages.keys.first;
-      _moodPercentages.forEach((mood, val) {
-        if (val > maxVal) { maxVal = val; dominantMood = mood; }
-      });
-      calculatedPrimaryColor = OrbPainter.getMoodColorValue(dominantMood);
-    }
-
-    final newEntry = MoodEntry(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      date: DateTime.now(),
-      primaryColorValue: calculatedPrimaryColor,
-      moodPercentages: Map.from(_moodPercentages),
-      note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
-      photoPaths: permanentPaths.isEmpty ? null : permanentPaths,
-      strokeData: _strokes.isNotEmpty ? jsonEncode(_strokes.map((s) => s.toJson()).toList()) : null,
-    );
-
-    await ref.read(moodNotifierProvider.notifier).addEntry(newEntry);
-    if (mounted) Navigator.of(context).pop();
   }
 
   void _nextPage() {
@@ -273,13 +290,13 @@ class _CreateWizardScreenState extends ConsumerState<CreateWizardScreen> with Si
         const Padding(padding: EdgeInsets.all(16), child: Text('Attach Photos', style: TextStyle(fontSize: 20))),
         Expanded(
           child: GridView.builder(
-            itemCount: _photoPaths.length + 1,
+            itemCount: _selectedFiles.length + 1,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3),
             itemBuilder: (context, index) {
-              if (index == _photoPaths.length) {
+              if (index == _selectedFiles.length) {
                 return GestureDetector(onTap: _pickImage, child: const Icon(Icons.add_a_photo));
               }
-              return Image.file(File(_photoPaths[index]), fit: BoxFit.cover);
+              return Image.file(File(_selectedFiles[index].path), fit: BoxFit.cover);
             },
           ),
         ),

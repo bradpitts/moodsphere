@@ -141,10 +141,8 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = math.min(size.width, size.height) / 2.5 * scale;
 
-    // 1. RESTORED: Parallax Nebula Dust Clouds
     _drawParallaxDustClouds(canvas, size);
 
-    // 2. RESTORED: 220 Background Ambient Stars
     final starRandom = math.Random(101);
     final driftOffsetZ = (driftVal * 300) % 600;
 
@@ -174,7 +172,6 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
 
     if (entries.isEmpty) return;
 
-    // 3. Constellation & Mood Star Setup
     Map<String, List<Offset>> rashiConstellations = {};
     final starPoints = <Offset>[];
     final starEntries = <MoodEntry>[];
@@ -205,18 +202,24 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
           if (val > maxVal) { maxVal = val; dominantMood = key; }
         });
       }
+      
+      // Fallback for simple saved orbs so they join constellations too
+      if (dominantMood.isEmpty && entry.primaryColorValue != 0) {
+        dominantMood = OrbPainter.getMoodFromColorValue(entry.primaryColorValue);
+      }
+
       if (dominantMood.isNotEmpty) {
         String rashi = OrbPainter.getRashiForMood(dominantMood);
         rashiConstellations.putIfAbsent(rashi, () => []).add(screenPos);
       }
     }
 
-    // 4. Draw Zodiac Constellation Lines
+    // Draw Constellation Lines (Thicker & Brighter)
     final linePaint = Paint()
-      ..color = Colors.white.withOpacity(0.25)
-      ..strokeWidth = 1.2
+      ..color = Colors.white.withOpacity(0.6)
+      ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5);
 
     for (var rashiGroup in rashiConstellations.entries) {
       if (rashiGroup.value.length >= 2) {
@@ -233,7 +236,7 @@ class _GalaxySpaceDriftPainter extends CustomPainter {
       }
     }
 
-    // 5. Draw Mood Stars (Multi-color support)
+    // Draw Mood Stars
     for (int i = 0; i < starPoints.length; i++) {
       final pos = starPoints[i];
       final entry = starEntries[i];

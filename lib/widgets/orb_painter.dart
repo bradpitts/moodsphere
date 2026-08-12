@@ -85,24 +85,42 @@ class OrbPainter extends CustomPainter {
       case 'overwhelmed': return const Color(0xFF5C6BC0);
       case 'apathy': return const Color(0xFFBDBDBD);
       case 'neutral': return const Color(0xFFE5E5EA);
+      case 'calm': return const Color(0xFF2ECC71);
+      case 'creative': return const Color(0xFF9B59B6);
+      case 'passion': return const Color(0xFFFF6B6B);
+      case 'melancholy': return const Color(0xFF5D6D7E);
+      case 'peace': return const Color(0xFF1ABC9C);
+      case 'energy': return const Color(0xFFE74C3C);
       default: return const Color(0xFFFFD700);
     }
+  }
+
+  static String getMoodFromColorValue(int colorValue) {
+    if (colorValue == 0xFFFFD700) return 'Joy';
+    if (colorValue == 0xFF2ECC71) return 'Calm'; 
+    if (colorValue == 0xFF3498DB) return 'Serene'; 
+    if (colorValue == 0xFFE74C3C) return 'Energy'; 
+    if (colorValue == 0xFF9B59B6) return 'Creative'; 
+    if (colorValue == 0xFFFF6B6B) return 'Passion'; 
+    if (colorValue == 0xFF5D6D7E) return 'Melancholy'; 
+    if (colorValue == 0xFF1ABC9C) return 'Peace'; 
+    return 'Neutral';
   }
 
   static String getRashiForMood(String dominantMood) {
     final normalized = dominantMood.trim().toLowerCase();
     switch (normalized) {
-      case 'anger': case 'frustration': return 'Mesha (Aries)';
-      case 'serenity': case 'balance': return 'Vrishabha (Taurus)';
+      case 'anger': case 'frustration': case 'passion': return 'Mesha (Aries)';
+      case 'serenity': case 'balance': case 'calm': case 'serene': return 'Vrishabha (Taurus)';
       case 'joy': return 'Mithuna (Gemini)';
-      case 'sadness': case 'empathy': return 'Karka (Cancer)';
-      case 'confidence': case 'hope': return 'Simha (Leo)';
+      case 'sadness': case 'empathy': case 'melancholy': return 'Karka (Cancer)';
+      case 'confidence': case 'hope': case 'energy': return 'Simha (Leo)';
       case 'neutral': case 'apathy': return 'Kanya (Virgo)';
       case 'love': return 'Tula (Libra)';
       case 'fear': case 'disgust': case 'overwhelmed': return 'Vrishchika (Scorpio)';
       case 'inspiration': case 'longing': return 'Dhanu (Sagittarius)';
       case 'guilt': return 'Makara (Capricorn)';
-      case 'anxiety': return 'Kumbha (Aquarius)';
+      case 'anxiety': case 'creative': return 'Kumbha (Aquarius)';
       case 'gratitude': case 'peace': return 'Meena (Pisces)';
       default: return 'Unknown';
     }
@@ -142,7 +160,7 @@ class OrbPainter extends CustomPainter {
       });
 
       if (colors.isEmpty) {
-        final fallback = primaryColorValue != null ? Color(primaryColorValue!) : const Color(0xFFFFD700);
+        final fallback = primaryColorValue != null && primaryColorValue != 0 ? Color(primaryColorValue!) : const Color(0xFFFFD700);
         colors = [fallback, fallback];
       } else if (colors.length == 1) colors.add(colors.first);
 
@@ -155,7 +173,7 @@ class OrbPainter extends CustomPainter {
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18.0),
       );
     } else if (!isInteractiveWizard && renderStrokes.isEmpty) {
-      final fallbackColor = primaryColorValue != null ? Color(primaryColorValue!) : const Color(0xFFFFD700);
+      final fallbackColor = primaryColorValue != null && primaryColorValue != 0 ? Color(primaryColorValue!) : const Color(0xFFFFD700);
       canvas.drawCircle(
         center,
         radius,

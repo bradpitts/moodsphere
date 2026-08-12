@@ -18,11 +18,10 @@ class PaintOrbScreen extends ConsumerStatefulWidget {
   ConsumerState<PaintOrbScreen> createState() => _PaintOrbScreenState();
 }
 
-class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
-    with SingleTickerProviderStateMixin {
+class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen> with SingleTickerProviderStateMixin {
   late Color _selectedColor;
   final TextEditingController _noteController = TextEditingController();
-  String? _selectedPhotoPath;
+  XFile? _selectedPhotoFile;
   final ImagePicker _picker = ImagePicker();
   bool _isSaving = false;
 
@@ -60,19 +59,15 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 80,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 75,
       );
       if (pickedFile != null) {
-        setState(() {
-          _selectedPhotoPath = pickedFile.path;
-        });
+        setState(() { _selectedPhotoFile = pickedFile; });
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Image selection failed ($e)')),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Image selection failed ($e)')));
     }
   }
 
@@ -80,27 +75,31 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
     if (_isSaving) return;
     setState(() => _isSaving = true);
 
-    await _flyAnimationController.forward();
+    try {
+      await _flyAnimationController.forward();
 
-    String? permanentPath;
-    if (_selectedPhotoPath != null) {
-       final docDir = await getApplicationDocumentsDirectory();
-       final fileName = '${DateTime.now().millisecondsSinceEpoch}_${_selectedPhotoPath!.split('/').last}';
-       final savedFile = await File(_selectedPhotoPath!).copy('${docDir.path}/$fileName');
-       permanentPath = savedFile.path;
+      String? permanentPath;
+      if (_selectedPhotoFile != null) {
+         final docDir = await getApplicationDocumentsDirectory();
+         final String safeName = _selectedPhotoFile!.name.isNotEmpty ? _selectedPhotoFile!.name : 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
+         permanentPath = '${docDir.path}/${DateTime.now().millisecondsSinceEpoch}_$safeName';
+         await _selectedPhotoFile!.saveTo(permanentPath);
+      }
+
+      final newEntry = MoodEntry(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        date: DateTime.now(),
+        colorValue: _selectedColor.value,
+        note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
+        photoPaths: permanentPath != null ? [permanentPath] : null,
+      );
+
+      await ref.read(moodNotifierProvider.notifier).addEntry(newEntry);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      setState(() => _isSaving = false);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save entry: $e')));
     }
-
-    final newEntry = MoodEntry(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      date: DateTime.now(),
-      colorValue: _selectedColor.value,
-      note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
-      photoPaths: permanentPath != null ? [permanentPath] : null,
-    );
-
-    await ref.read(moodNotifierProvider.notifier).addEntry(newEntry);
-
-    if (mounted) Navigator.of(context).pop();
   }
 
   @override
@@ -110,10 +109,7 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white70),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white70), onPressed: () => Navigator.of(context).pop()),
         title: Text('Paint Your Mood', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 20)),
         centerTitle: true,
       ),
@@ -134,13 +130,7 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
                       height: 240,
                       child: CustomPaint(
                         painter: OrbPainter(
-                          strokes: [
-                            PaintStroke(
-                              points: const [Offset(120, 120)],
-                              color: _selectedColor,
-                              strokeWidth: 200,
-                            ),
-                          ],
+                          strokes: [PaintStroke(points: const [Offset(120, 120)], color: _selectedColor, strokeWidth: 200)],
                         ),
                       ),
                     ),
@@ -148,10 +138,7 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
                 ),
               ).animate().scale(duration: 600.ms, curve: Curves.easeOutBack),
               const SizedBox(height: 32),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text('SELECT MOOD COLOR', style: GoogleFonts.inter(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w700)),
-              ),
+              Align(alignment: Alignment.centerLeft, child: Text('SELECT MOOD COLOR', style: GoogleFonts.inter(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w700))),
               const SizedBox(height: 14),
               SizedBox(
                 height: 70,
@@ -173,16 +160,9 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
                             width: isSelected ? 44 : 38,
                             height: isSelected ? 44 : 38,
                             decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: color,
+                              shape: BoxShape.circle, color: color,
                               border: Border.all(color: isSelected ? Colors.white : Colors.transparent, width: isSelected ? 3 : 0),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: color.withOpacity(isSelected ? 0.6 : 0.25),
-                                  blurRadius: isSelected ? 12 : 6,
-                                  spreadRadius: isSelected ? 2 : 0,
-                                ),
-                              ],
+                              boxShadow: [BoxShadow(color: color.withOpacity(isSelected ? 0.6 : 0.25), blurRadius: isSelected ? 12 : 6)],
                             ),
                             child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 20) : null,
                           ),
@@ -195,20 +175,14 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
                 ),
               ),
               const SizedBox(height: 28),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text('OPTIONAL NOTE', style: GoogleFonts.inter(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w700)),
-              ),
+              Align(alignment: Alignment.centerLeft, child: Text('OPTIONAL NOTE', style: GoogleFonts.inter(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w700))),
               const SizedBox(height: 10),
               TextField(
-                controller: _noteController,
-                maxLines: 3,
+                controller: _noteController, maxLines: 3,
                 style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'Reflect on how you feel right now...',
-                  hintStyle: GoogleFonts.inter(color: Colors.white38, fontSize: 14),
-                  filled: true,
-                  fillColor: const Color(0xFF1E1E2C),
+                  filled: true, fillColor: const Color(0xFF1E1E2C),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                   focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _selectedColor.withOpacity(0.8), width: 1.5)),
                 ),
@@ -219,21 +193,21 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: _pickImage,
-                      icon: Icon(_selectedPhotoPath != null ? Icons.photo_outlined : Icons.add_a_photo_outlined, color: _selectedColor, size: 18),
-                      label: Text(_selectedPhotoPath != null ? 'Change Photo' : 'Attach Photo', style: GoogleFonts.inter(color: Colors.white, fontSize: 14)),
+                      icon: Icon(_selectedPhotoFile != null ? Icons.photo_outlined : Icons.add_a_photo_outlined, color: _selectedColor, size: 18),
+                      label: Text(_selectedPhotoFile != null ? 'Change Photo' : 'Attach Photo', style: GoogleFonts.inter(color: Colors.white, fontSize: 14)),
                       style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), side: BorderSide(color: Colors.white.withOpacity(0.15)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
                     ),
                   ),
-                  if (_selectedPhotoPath != null) ...[
+                  if (_selectedPhotoFile != null) ...[
                     const SizedBox(width: 12),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: Stack(
                         alignment: Alignment.topRight,
                         children: [
-                          Image.file(File(_selectedPhotoPath!), width: 48, height: 48, fit: BoxFit.cover),
+                          Image.file(File(_selectedPhotoFile!.path), width: 48, height: 48, fit: BoxFit.cover),
                           GestureDetector(
-                            onTap: () => setState(() => _selectedPhotoPath = null),
+                            onTap: () => setState(() => _selectedPhotoFile = null),
                             child: Container(color: Colors.black54, child: const Icon(Icons.close, color: Colors.white, size: 16)),
                           ),
                         ],
@@ -244,13 +218,11 @@ class _PaintOrbScreenState extends ConsumerState<PaintOrbScreen>
               ),
               const SizedBox(height: 36),
               SizedBox(
-                width: double.infinity,
-                height: 54,
+                width: double.infinity, height: 54,
                 child: ElevatedButton(
                   onPressed: _isSaving ? null : _saveEntry,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _selectedColor,
-                    foregroundColor: Colors.black,
+                    backgroundColor: _selectedColor, foregroundColor: Colors.black,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   child: _isSaving
